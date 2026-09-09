@@ -1,0 +1,3 @@
+import { collectNews } from '@/src/news';
+export const dynamic='force-dynamic';
+export async function GET(){ const encoder=new TextEncoder(); let closed=false; const stream=new ReadableStream({start(controller){const send=async()=>{try{const items=await collectNews(); for(const item of items.slice(0,10)) controller.enqueue(encoder.encode(`data: ${JSON.stringify(item)}\n\n`));}catch{} }; send(); const timer=setInterval(send,15000); return()=>{closed=true;clearInterval(timer);};}}); return new Response(stream,{headers:{'Content-Type':'text/event-stream','Cache-Control':'no-cache, no-transform','Connection':'keep-alive'}}); }
