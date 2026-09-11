@@ -66,8 +66,33 @@ export async function GET() {
 
     if (!response.ok) {
       const detail = await response.text();
+      let providerCode: string | null = null;
+      let providerType: string | null = null;
+      let providerMessage: string | null = null;
+
+      try {
+        const parsed = JSON.parse(detail);
+        providerCode = parsed?.error?.code ?? null;
+        providerType = parsed?.error?.type ?? null;
+        providerMessage = parsed?.error?.message ?? null;
+      } catch {
+        providerMessage = detail.slice(0, 300) || null;
+      }
+
       console.error('OpenAI error:', response.status, detail.slice(0, 500));
-      return NextResponse.json({ ok: false, error: 'AI provider request failed', fallback: deterministic }, { status: 502 });
+      return NextResponse.json(
+        {
+          ok: false,
+          error: 'AI provider request failed',
+          providerStatus: response.status,
+          providerCode,
+          providerType,
+          providerMessage,
+          model: MODEL,
+          fallback: deterministic,
+        },
+        { status: 502 }
+      );
     }
 
     const data = await response.json();
