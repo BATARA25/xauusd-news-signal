@@ -47,67 +47,6 @@ function normalize(item: Parser.Item, source: string): News | null {
   };
 }
 
-function decodeHtml(value: string): string {
-  return value
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;/gi, "'")
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>');
-}
-
-async function collectBlsRelease(source: string, url: string, marker: string): Promise<News[]> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), FEED_TIMEOUT_MS);
-
-  try {
-    const response = await fetch(url, {
-      signal: controller.signal,
-      headers: {
-        Accept: 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.1',
-        'User-Agent': 'NewsXLeak/1.0 (+XAUUSD news intelligence)',
-      },
-      cache: 'no-store',
-    });
-
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-    const html = await response.text();
-    const text = decodeHtml(
-      html
-        .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-        .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-        .replace(/<[^>]+>/g, ' '),
-    ).replace(/\s+/g, ' ').trim();
-
-    const markerIndex = text.toLowerCase().indexOf(marker.toLowerCase());
-    const excerpt = markerIndex >= 0 ? text.slice(markerIndex, markerIndex + 900) : text.slice(0, 900);
-    const event = detectEvent(excerpt, new Date().toISOString());
-    if (!event) return [];
-
-    const publishedAt = event.releaseAt ?? new Date().toISOString();
-    const title = event.name;
-    const classified = classify((title + ' ' + excerpt).toLowerCase());
-
-    return [{
-      id: url,
-      title,
-      url,
-      source,
-      publishedAt,
-      ...classified,
-      summary: excerpt.slice(0, 320),
-      event,
-    }];
-  } catch (error) {
-    console.error('[news] BLS release failed', { source, error });
-    return [];
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
 async function collectFeed(source: string, url: string): Promise<News[]> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), FEED_TIMEOUT_MS);
@@ -142,14 +81,7 @@ async function collectFeed(source: string, url: string): Promise<News[]> {
 }
 
 async function collectNewsUncached(): Promise<News[]> {
-  const [googleNews, federalReserve, blsEmployment, blsCpi, blsPpi] = await Promise.all([
-    collectFeed(FEEDS[0].source, FEEDS[0].url),
-    collectFeed(FEEDS[1].source, FEEDS[1].url),
-    collectBlsRelease('BLS Employment Situation', 'https://www.bls.gov/news.release/empsit.htm', 'THE EMPLOYMENT SITUATION'),
-    collectBlsRelease('BLS CPI', 'https://www.bls.gov/news.release/cpi.htm', 'CONSUMER PRICE INDEX'),
-    collectBlsRelease('BLS PPI', 'https://www.bls.gov/ppi/news-release/home.htm', 'Latest PPI News Releases'),
-  ]);
-  const batches = [googleNews, federalReserve, blsEmployment, blsCpi, blsPpi];
+  const batches = await Promise.all(FEEDS.map((feed) => collectFeed(feed.source, feed.url)));
   const deduped = new Map<string, News>();
 
   for (const item of batches.flat()) {
