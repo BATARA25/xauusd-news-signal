@@ -2,8 +2,6 @@ import type { News } from '../news/types';
 import { clampUnit, newsWeight, releaseSurpriseDirection, SIGNAL_CONFIG } from './weights';
 import type { MarketSignal, SignalComponents, SignalPhase } from './types';
 
-type DirectionalContext = { value: number; weight: number };
-
 function aggregate(news: News[], now: number, predicate?: (item: News) => boolean): number {
   let numerator = 0;
   let denominator = 0;
@@ -19,20 +17,28 @@ function aggregate(news: News[], now: number, predicate?: (item: News) => boolea
 
 function findEvent(news: News[], now: number) {
   const events = news
-    .filter((item) => item.event?.id)
+    .filter((item) => item.event?.id && item.event.releaseAt)
     .map((item) => item.event!)
-    .filter((event, index, all) => all.findIndex((candidate) => candidate.id === event.id) === index);
+    .filter((event, index, all) =>
+      all.findIndex((candidate) => candidate.id === event.id && candidate.releaseAt === event.releaseAt) === index,
+    );
 
   return events
-    .map((event) => ({ event, releaseAt: event.releaseAt ? Date.parse(event.releaseAt) : Number.NaN }))
-    .filter(({ releaseAt }) => Number.isFinite(releaseAt))
+    .map((event) => ({ event, releaseAt: Date.parse(event.releaseAt!) }))
+    .filter(({ releaseAt }) => {
+      if (!Number.isFinite(releaseAt)) return false;
+      const minutesFromRelease = (releaseAt - now) / 60000;
+      return minutesFromRelease >= -SIGNAL_CONFIG.postReleaseWindowMinutes
+        && minutesFromRelease <= SIGNAL_CONFIG.preReleaseWindowMinutes;
+    })
     .sort((a, b) => Math.abs(a.releaseAt - now) - Math.abs(b.releaseAt - now))[0]?.event;
 }
 
 function resolvePhase(event: News['event'], now: number): SignalPhase {
   if (!event?.releaseAt) return 'CONTEXT';
   const releaseAt = Date.parse(event.releaseAt);
-  if (!Number.isFinite(releaseAt) || releaseAt > now) return 'PRE_RELEASE';
+  if (!Number.isFinite(releaseAt)) return 'CONTEXT';
+  if (releaseAt > now) return 'PRE_RELEASE';
   const minutesSinceRelease = (now - releaseAt) / 60000;
   return minutesSinceRelease <= SIGNAL_CONFIG.postReleaseWindowMinutes ? 'POST_RELEASE' : 'CONTEXT';
 }
@@ -51,6 +57,33 @@ function componentScore(components: SignalComponents, phase: SignalPhase): numbe
     );
   }
   return components.context;
+}
+
+function directionalAgreement(news: News[]): number {
+  const directional = news.filter((item) => item.direction !== 'NEUTRAL');
+  if (directional.length === 0) return 0;
+  const bullish = directional.filter((item) => item.direction === 'BULLISH').length;
+  const bearish = directional.length - bullish;
+  return Math.max(bullish, bearish) / directional.length;
+}
+
+function evidenceScore(news: News[], event: News['event'], phase: SignalPhase): number {
+  const sampleEvidence = Math.min(1, news.length / 10);
+  const agreement = directionalAgreement(news);
+  const sourceQuality = news.length === 0
+    ? 0
+    : news.reduce((sum, item) => sum + (item.sourceQuality ?? 0.5), 0) / news.length;
+  const eventEvidence = event ? 1 : 0.25;
+  const structuredReleaseEvidence =
+    phase === 'POST_RELEASE' && event?.actual !== undefined && event?.forecast !== undefined ? 1 : 0.4;
+
+  return Math.round((
+    sampleEvidence * 0.30 +
+    agreement * 0.25 +
+    sourceQuality * 0.20 +
+    eventEvidence * 0.10 +
+    structuredReleaseEvidence * 0.15
+  ) * 100);
 }
 
 export function buildSignal(news: News[], now = Date.now()): MarketSignal {
@@ -76,9 +109,14 @@ export function buildSignal(news: News[], now = Date.now()): MarketSignal {
   const components: SignalComponents = { context, confirmation, surprise, reaction };
   const normalized = componentScore(components, phase);
   const score = Math.round(50 + normalized * 50);
+  const evidence = evidenceScore(recent, event, phase);
+  const rawConfidence = 50 + Math.abs(normalized) * 45;
   const confidence = Math.min(
     SIGNAL_CONFIG.maxConfidence,
-    Math.max(SIGNAL_CONFIG.minConfidence, Math.round(50 + Math.abs(normalized) * 45)),
+    Math.max(
+      SIGNAL_CONFIG.minConfidence,
+      Math.round(20 + (rawConfidence - 20) * (evidence / 100)),
+    ),
   );
   const bias = Math.abs(normalized) < SIGNAL_CONFIG.waitThreshold
     ? 'WAIT'
@@ -88,6 +126,7 @@ export function buildSignal(news: News[], now = Date.now()): MarketSignal {
   const impact = highImpactCount > 0
     ? 'HIGH'
     : recent.some((item) => item.impact === 'MEDIUM') ? 'MEDIUM' : 'LOW';
+
   const drivers: string[] = [];
   for (const item of recent) {
     if (item.direction !== 'NEUTRAL' && item.impact === 'HIGH' && drivers.length < 3) {
@@ -99,11 +138,13 @@ export function buildSignal(news: News[], now = Date.now()): MarketSignal {
     symbol: 'XAUUSD',
     bias,
     confidence,
+    evidenceScore: evidence,
     score,
     impact,
     phase,
     eventId: event?.id,
     eventName: event?.name,
+    eventReleaseAt: event?.releaseAt,
     components,
     updatedAt: new Date(now).toISOString(),
     drivers,
