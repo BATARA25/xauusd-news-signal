@@ -1,4 +1,4 @@
-const CACHE_NAME = 'newsxleak-shell-v2';
+const CACHE_NAME = 'newsxleak-shell-v3';
 const APP_SHELL = ['/', '/manifest.webmanifest', '/icon.svg'];
 
 self.addEventListener('install', (event) => {
@@ -14,6 +14,14 @@ self.addEventListener('activate', (event) => {
     ).then(() => self.clients.claim())
   );
 });
+
+self.addEventListener('message', (event) => {
+  const data = event.data || {};
+  if (data.type === 'TEST_NOTIFICATION') event.waitUntil(self.registration.showNotification('NewsXLeak', { body: 'Android alerts are enabled.', icon: '/icon.svg', badge: '/icon.svg', tag: 'newsxleak-test', data: { url: '/' } }));
+  if (data.type === 'SIGNAL_ALERT' && (data.bias === 'BUY' || data.bias === 'SELL')) event.waitUntil(self.registration.showNotification('NewsXLeak — XAUUSD', { body: data.bias + ' · ' + data.eventName + ' · ' + data.confidence + '% confidence', icon: '/icon.svg', badge: '/icon.svg', tag: 'newsxleak-signal-' + data.bias, renotify: true, data: { url: '/' } }));
+});
+
+self.addEventListener('notificationclick', (event) => { event.notification.close(); event.waitUntil(clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => { for (const client of list) if ('focus' in client) return client.focus(); if (clients.openWindow) return clients.openWindow(event.notification.data?.url || '/'); return undefined; })); });
 
 self.addEventListener('fetch', (event) => {
   const request = event.request;
