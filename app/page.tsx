@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 type News = {
   id: string;
@@ -12,6 +12,10 @@ type News = {
   direction: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
   score: number;
   summary: string;
+  sourceTier?: string;
+  sourceQuality?: number;
+  novelty?: number;
+  marketMoving?: number;
 };
 
 type Signal = {
@@ -20,6 +24,8 @@ type Signal = {
   confidence: number;
   score: number;
   impact: 'HIGH' | 'MEDIUM' | 'LOW';
+  phase?: 'PRE_RELEASE' | 'POST_RELEASE' | 'CONTEXT';
+  eventName?: string;
   updatedAt: string;
   drivers: string[];
   highImpactCount: number;
@@ -39,55 +45,47 @@ export default function Home() {
   const [signal, setSignal] = useState<Signal | null>(null);
   const [live, setLive] = useState(false);
   const [alert, setAlert] = useState<'BUY' | 'SELL' | null>(null);
+  const previousBias = useRef<Signal['bias']>('WAIT');
 
-  const refreshSignal = async () => {
+  const refresh = async () => {
     try {
-      const response = await fetch('/api/signal', { cache: 'no-store' });
-      if (!response.ok) return;
-      const data = await response.json();
-      const next = data.signal as Signal | undefined;
-      setSignal(next ?? null);
-      if (next?.bias === 'BUY' || next?.bias === 'SELL') setAlert(next.bias);
+      const [newsResponse, signalResponse] = await Promise.all([
+        fetch('/api/news', { cache: 'no-store' }),
+        fetch('/api/signal', { cache: 'no-store' }),
+      ]);
+
+      if (newsResponse.ok) {
+        const data = await newsResponse.json();
+        setNews(data.news ?? []);
+      }
+
+      if (signalResponse.ok) {
+        const data = await signalResponse.json();
+        const next = data.signal as Signal | undefined;
+        if (!next) return;
+
+        setSignal(next);
+        setLive(true);
+
+        const isDirectional = next.bias === 'BUY' || next.bias === 'SELL';
+        if (isDirectional && next.bias !== previousBias.current) {
+          setAlert(next.bias);
+        }
+        previousBias.current = next.bias;
+      } else {
+        setLive(false);
+      }
     } catch {
-      // Keep the previous signal during transient network failures.
+      setLive(false);
     }
   };
 
   useEffect(() => {
     document.title = 'NewsXLeak — XAUUSD News Intelligence';
+    void refresh();
 
-    const loadNews = async () => {
-      try {
-        const response = await fetch('/api/news', { cache: 'no-store' });
-        if (!response.ok) return;
-        const data = await response.json();
-        setNews(data.news ?? []);
-      } catch {
-        // The SSE stream can recover the feed.
-      }
-    };
-
-    void loadNews();
-    void refreshSignal();
-
-    const source = new EventSource('/api/news/stream');
-    source.onopen = () => setLive(true);
-    source.onerror = () => setLive(false);
-    source.onmessage = (event) => {
-      try {
-        const item = JSON.parse(event.data) as News;
-        setNews((current) => [item, ...current.filter((entry) => entry.id !== item.id)].slice(0, 50));
-      } catch {
-        // Ignore malformed individual SSE events.
-      }
-    };
-
-    const timer = window.setInterval(() => void refreshSignal(), 15000);
-
-    return () => {
-      source.close();
-      window.clearInterval(timer);
-    };
+    const timer = window.setInterval(() => void refresh(), 15000);
+    return () => window.clearInterval(timer);
   }, []);
 
   useEffect(() => {
@@ -138,7 +136,7 @@ export default function Home() {
         <section className="quickbar">
           <div><span>MARKET</span><strong>XAUUSD</strong></div>
           <div><span>IMPACT</span><strong>{signal?.impact ?? '—'}</strong></div>
-          <div><span>EVENTS</span><strong>{signal?.highImpactCount ?? '—'}</strong></div>
+          <div><span>PHASE</span><strong>{signal?.phase ?? '—'}</strong></div>
           <div><span>UPDATED</span><strong>{signal ? timeWIB(signal.updatedAt) : '—'}</strong></div>
         </section>
 
@@ -176,7 +174,7 @@ export default function Home() {
             <span className="label">SIGNAL ENGINE</span>
             <h2>80:20 → 40:60</h2>
           </div>
-          <p>NewsXLeak separates news context from market confirmation. The engine weighs fundamental news first, then validates direction against subsequent market reaction.</p>
+          <p>Pre-release context uses the 80:20 weighting. After a structured release, the engine shifts to 40:60 surprise versus reaction.</p>
         </section>
 
         <footer>
