@@ -12,11 +12,36 @@ const EVENT_PATTERNS: Array<{ pattern: RegExp; name: string; id: string }> = [
   { pattern: /pce price index|\bpce\b/i, name: 'US PCE', id: 'US_PCE' },
 ];
 
+function parseNumber(value: string): number | undefined {
+  const normalized = value.replace(/,/g, '').trim().toLowerCase();
+  const multiplier = normalized.endsWith('k') ? 1000 : normalized.endsWith('m') ? 1000000 : 1;
+  const numeric = Number(normalized.replace(/[km]$/, ''));
+  return Number.isFinite(numeric) ? numeric * multiplier : undefined;
+}
+
+function extractMetric(text: string, labels: string[]): number | undefined {
+  const pattern = new RegExp('(?:' + labels.join('|') + ')\\s*(?:was|is|came in at|reported at|:)?\\s*(-?\\d+(?:,\\d{3})*(?:\\.\\d+)?(?:[km])?)', 'i');
+  return parseNumber(pattern.exec(text)?.[1] ?? '');
+}
+
+function enrichEventValues(event: NewsEvent, text: string): NewsEvent {
+  const actual = extractMetric(text, ['actual', 'actuals', 'came in']);
+  const forecast = extractMetric(text, ['forecast', 'expected', 'estimate', 'consensus']);
+  const previous = extractMetric(text, ['previous', 'prior']);
+  return {
+    ...event,
+    ...(actual !== undefined ? { actual } : {}),
+    ...(forecast !== undefined ? { forecast } : {}),
+    ...(previous !== undefined ? { previous } : {}),
+  };
+}
+
 export function detectEvent(text: string, publishedAt = new Date().toISOString()): NewsEvent | undefined {
   const match = EVENT_PATTERNS.find((event) => event.pattern.test(text));
   if (!match) return undefined;
   const scheduled = nearestScheduledEvent(match.id, publishedAt);
-  return scheduled
+  const event = scheduled
     ? { id: match.id, name: match.name, releaseAt: scheduled.releaseAt }
     : { id: match.id, name: match.name };
+  return enrichEventValues(event, text);
 }
