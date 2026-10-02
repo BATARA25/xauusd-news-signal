@@ -8,9 +8,6 @@ const parser = new Parser();
 const FEEDS = [
   { source: 'Google News', url: 'https://news.google.com/rss/search?q=XAUUSD%20OR%20gold%20OR%20Federal%20Reserve%20OR%20FOMC&hl=en-US&gl=US&ceid=US:en' },
   { source: 'Federal Reserve', url: 'https://www.federalreserve.gov/feeds/press_all.xml' },
-  { source: 'BLS Employment Situation', url: 'https://www.bls.gov/feed/empsit.rss' },
-  { source: 'BLS CPI', url: 'https://www.bls.gov/feed/cpi.rss' },
-  { source: 'BLS PPI', url: 'https://www.bls.gov/feed/ppi.rss' },
 ] as const;
 
 const FEED_TIMEOUT_MS = 8000;
