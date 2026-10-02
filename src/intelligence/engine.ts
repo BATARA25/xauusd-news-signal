@@ -36,9 +36,12 @@ export function enrichNews(items: News[]): News[] {
       canonicalHeadline: canonical,
     };
 
-    if (!duplicate || quality > duplicate.sourceQuality) {
+    if (!duplicate) {
       accepted.push(enriched);
       titleMemory.push(item.title);
+    } else if (quality > (duplicate.sourceQuality ?? 0)) {
+      const index = accepted.findIndex((candidate) => candidate.id === duplicate.id);
+      if (index >= 0) accepted[index] = { ...enriched, duplicateOf: undefined };
     }
   }
 
