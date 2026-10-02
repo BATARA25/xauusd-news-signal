@@ -22,6 +22,10 @@ jobs:
           echo "News API response received: $(printf '%s' "$news" | wc -c) bytes"
           echo "$news" | grep -q '"ok":true'
 
+          price="$(curl -fsS --max-time 20 "$base/api/price")"
+          echo "$price"
+          echo "$price" | grep -q '"ok":true'
+
           signal="$(curl -fsS --max-time 30 "$base/api/signal")"
           echo "Signal API response received: $(printf '%s' "$signal" | wc -c) bytes"
           echo "$signal" | grep -q '"ok":true'
