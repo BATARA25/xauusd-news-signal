@@ -59,6 +59,7 @@ export default function Home() {
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
   const [notifications, setNotifications] = useState<NotificationPermission | 'unsupported'>('default');
   const [pushConnected, setPushConnected] = useState(false);
+  const [pushTesting, setPushTesting] = useState(false);
   const [latency, setLatency] = useState<{ analysisMs: number; signalMs: number } | null>(null);
   const previousKey = useRef('WAIT:');
 
@@ -82,12 +83,15 @@ export default function Home() {
 
   const enableNotifications = async () => {
     try {
-      if (await registerPush()) {
-        const registration = await navigator.serviceWorker.ready;
-        registration.active?.postMessage({ type: 'TEST_NOTIFICATION' });
-      }
+      if (!await registerPush()) return;
+      setPushTesting(true);
+      const response = await fetch('/api/push-test', { method: 'POST', cache: 'no-store' });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload?.ok || !payload?.sent) throw new Error('push_test_failed');
     } catch {
       setPushConnected(false);
+    } finally {
+      setPushTesting(false);
     }
   };
 
@@ -167,7 +171,7 @@ export default function Home() {
           <div className="header-actions">
             {installPrompt && <button className="install-button" onClick={() => void installApp()}>INSTALL</button>}
             <button className="install-button" onClick={() => void enableNotifications()}>
-              {pushConnected ? 'PUSH ON' : notifications === 'granted' ? 'ENABLE PUSH' : 'ALERTS'}
+              {pushTesting ? 'TESTING…' : pushConnected ? 'PUSH ON' : notifications === 'granted' ? 'ENABLE PUSH' : 'ALERTS'}
             </button>
             <div className="live"><i className={live ? 'on' : ''} />{live ? 'LIVE' : 'CONNECTING'}</div>
           </div>
