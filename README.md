@@ -12,7 +12,6 @@ The product is designed around one principle: **reduce the time between an impor
 
 - XAUUSD-first macro news monitoring
 - Normalized RSS/news collection
-- Official Federal Reserve and BLS feeds for core U.S. macro releases
 - Gold-relevance filtering
 - Deterministic macro classification
 - 80:20 pre-news context framework
