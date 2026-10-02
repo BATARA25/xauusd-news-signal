@@ -1,4 +1,5 @@
 import type { NewsImpact } from '../news/types';
+import type { MarketSnapshot } from '../market';
 
 export type SignalBias = 'BUY' | 'SELL' | 'WAIT';
 export type SignalPhase = 'PRE_RELEASE' | 'POST_RELEASE' | 'CONTEXT';
@@ -8,6 +9,8 @@ export type SignalComponents = {
   confirmation: number;
   surprise: number;
   reaction: number;
+  marketRegime: number;
+  macroAlignment: number;
 };
 
 export type IntradaySetup = {
@@ -20,6 +23,8 @@ export type IntradaySetup = {
   takeProfit2?: number;
   trigger: string;
   note: string;
+  riskReward?: number;
+  volatilityRegime?: MarketSnapshot['volatilityRegime'];
 };
 
 export type MarketSignal = {
@@ -42,4 +47,7 @@ export type MarketSignal = {
   drivers: string[];
   highImpactCount: number;
   sampleSize: number;
+  market?: MarketSnapshot;
+  regime: MarketSnapshot['trendRegime'];
+  volatility: MarketSnapshot['volatilityRegime'];
 };
