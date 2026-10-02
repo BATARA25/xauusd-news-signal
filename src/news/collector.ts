@@ -10,7 +10,9 @@ const FEEDS = [
   { source: 'Federal Reserve', url: 'https://www.federalreserve.gov/feeds/press_all.xml' },
 ] as const;
 
-const FEED_TIMEOUT_MS = 8000;
+const FEED_TIMEOUT_MS = 5000;
+const OFFICIAL_RELEASE_TIMEOUT_MS = 2500;
+const BLS_EMPLOYMENT_URL = 'https://www.bls.gov/news.release/empsit.nr0.htm';
 
 const BULLISH_TERMS = ['rate cut','rate cuts','dovish','lower rates','lower yield','weaker dollar','weak dollar','recession','slowing inflation','cooler inflation','soft inflation','rate cuts expected','hike is unlikely','hike unlikely','no urgency to hike','wait before hiking'] as const;
 const BEARISH_TERMS = ['rate hike','rate hikes','hawkish','higher rates','higher yield','strong dollar','strong usd','sticky inflation','hot inflation','inflation remains elevated'] as const;
@@ -80,8 +82,73 @@ async function collectFeed(source: string, url: string): Promise<News[]> {
   }
 }
 
-async function collectNewsUncached(): Promise<News[]> {
-  const batches = await Promise.all(FEEDS.map((feed) => collectFeed(feed.source, feed.url)));
+async function collectOfficialEmployment(): Promise<News[]> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), OFFICIAL_RELEASE_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(BLS_EMPLOYMENT_URL, {
+      signal: controller.signal,
+      headers: {
+        Accept: 'text/html, text/plain;q=0.9, */*;q=0.1',
+        'User-Agent': 'NewsXLeak/1.0 (+XAUUSD news intelligence)',
+      },
+      cache: 'no-store',
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+    const html = await response.text();
+    const text = html
+      .replace(/<script[\\s\\S]*?<\\/script>/gi, ' ')
+      .replace(/<style[\\s\\S]*?<\\/style>/gi, ' ')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&nbsp;/gi, ' ')
+      .replace(/&amp;/gi, '&')
+      .replace(/\\s+/g, ' ')
+      .trim();
+
+    const titleMatch = text.match(/THE EMPLOYMENT SITUATION - ([A-Z]+ 2026)/i);
+    if (!titleMatch) return [];
+
+    const publishedAt = new Date().toISOString();
+    const payrollMatch = text.match(/Total nonfarm payroll employment (?:increased|decreased) by ([0-9,]+) in [A-Z]+/i);
+    const unemploymentMatch = text.match(/unemployment rate (?:was|fell to|rose to) ([0-9.]+) percent/i);
+
+    const details = [
+      payrollMatch ? `NFP ${payrollMatch[1]}` : '',
+      unemploymentMatch ? `unemployment ${unemploymentMatch[1]}%` : '',
+    ].filter(Boolean).join(' · ');
+
+    const headline = `Official BLS Employment Situation — ${titleMatch[1]}${details ? ` · ${details}` : ''}`;
+    return [{
+      id: 'bls-employment-situation-' + titleMatch[1].toLowerCase().replace(/\\s+/g, '-'),
+      title: headline,
+      url: BLS_EMPLOYMENT_URL,
+      source: 'BLS',
+      publishedAt,
+      impact: 'HIGH',
+      direction: 'NEUTRAL',
+      score: 50,
+      summary: 'Official BLS Employment Situation release detected directly from the BLS publication page.',
+      event: detectEvent('Employment Situation NFP Nonfarm Payroll unemployment', publishedAt),
+      sourceTier: 'OFFICIAL',
+      sourceQuality: 1,
+      novelty: 1,
+      marketMoving: 1,
+    }];
+  } catch (error) {
+    console.error('[news] official BLS check failed', error);
+    return [];
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function collectNewsUncached(realtime = false): Promise<News[]> {
+  const batches = await Promise.all([
+    ...FEEDS.map((feed) => collectFeed(feed.source, feed.url)),
+    ...(realtime ? [collectOfficialEmployment()] : []),
+  ]);
   const deduped = new Map<string, News>();
 
   for (const item of batches.flat()) {
@@ -96,5 +163,5 @@ async function collectNewsUncached(): Promise<News[]> {
 
 
 export async function collectNews(options: { realtime?: boolean } = {}): Promise<News[]> {
-  return withNewsCache(collectNewsUncached, { bypass: options.realtime === true });
+  return withNewsCache(() => collectNewsUncached(options.realtime === true), { bypass: options.realtime === true });
 }
