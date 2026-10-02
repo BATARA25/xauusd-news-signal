@@ -20,14 +20,50 @@ function parseNumber(value: string): number | undefined {
 }
 
 function extractMetric(text: string, labels: string[]): number | undefined {
-  const pattern = new RegExp('(?:' + labels.join('|') + ')\\s*(?:was|is|came in at|reported at|:)?\\s*(-?\\d+(?:,\\d{3})*(?:\\.\\d+)?(?:[km])?)', 'i');
+  const pattern = new RegExp(
+    '(?:' + labels.join('|') + ')\\s*(?:was|is|came in at|reported at|:)?\\s*(-?\\d+(?:,\\d{3})*(?:\\.\\d+)?(?:[km])?)',
+    'i',
+  );
   return parseNumber(pattern.exec(text)?.[1] ?? '');
 }
 
+function extractNfpActual(text: string): number | undefined {
+  const patterns = [
+    /(?:non[- ]farm payrolls?|payrolls?)\s+(?:rose|increased|added|grew|fell|declined|decreased)\s+by\s+([+-]?\d[\d,]*(?:\.\d+)?[km]?)/i,
+    /(?:non[- ]farm payrolls?|payrolls?)\s*(?:was|were|came in at|:)?\s*([+-]?\d[\d,]*(?:\.\d+)?[km]?)/i,
+    /(?:non[- ]farm payrolls?|payrolls?)\s*([+-]\d[\d,]*(?:\.\d+)?[km]?)/i,
+  ];
+  for (const pattern of patterns) {
+    const value = parseNumber(pattern.exec(text)?.[1] ?? '');
+    if (value !== undefined) return value;
+  }
+  return undefined;
+}
+
+function extractNfpForecast(text: string): number | undefined {
+  return extractMetric(text, [
+    'forecast',
+    'expected',
+    'estimate',
+    'consensus',
+    'economists expect',
+    'analysts expect',
+  ]);
+}
+
+function extractInflationMetric(text: string): number | undefined {
+  return extractMetric(text, ['actual', 'actuals', 'came in', 'reported at']);
+}
+
 function enrichEventValues(event: NewsEvent, text: string): NewsEvent {
-  const actual = extractMetric(text, ['actual', 'actuals', 'came in']);
-  const forecast = extractMetric(text, ['forecast', 'expected', 'estimate', 'consensus']);
+  const actual = event.id === 'US_NFP'
+    ? extractNfpActual(text) ?? extractMetric(text, ['actual', 'actuals'])
+    : extractInflationMetric(text);
+  const forecast = event.id === 'US_NFP'
+    ? extractNfpForecast(text)
+    : extractMetric(text, ['forecast', 'expected', 'estimate', 'consensus']);
   const previous = extractMetric(text, ['previous', 'prior']);
+
   return {
     ...event,
     ...(actual !== undefined ? { actual } : {}),
