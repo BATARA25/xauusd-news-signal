@@ -1,6 +1,7 @@
 import Parser from 'rss-parser';
 import type { News, NewsDirection, NewsImpact } from './types';
 import { detectEvent, enrichNews } from '../intelligence';
+import { withNewsCache } from './cache';
 
 const parser = new Parser();
 
@@ -77,7 +78,7 @@ async function collectFeed(source: string, url: string): Promise<News[]> {
   }
 }
 
-export async function collectNews(): Promise<News[]> {
+async function collectNewsUncached(): Promise<News[]> {
   const batches = await Promise.all(FEEDS.map((feed) => collectFeed(feed.source, feed.url)));
   const deduped = new Map<string, News>();
 
@@ -89,4 +90,9 @@ export async function collectNews(): Promise<News[]> {
   }
 
   return enrichNews([...deduped.values()]);
+}
+
+
+export async function collectNews(): Promise<News[]> {
+  return withNewsCache(collectNewsUncached);
 }
