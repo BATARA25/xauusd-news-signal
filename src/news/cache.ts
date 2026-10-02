@@ -6,10 +6,13 @@ let cachedNews: News[] | null = null;
 let cachedAt = 0;
 let inFlight: Promise<News[]> | null = null;
 
-export async function withNewsCache(loader: () => Promise<News[]>): Promise<News[]> {
+export async function withNewsCache(
+  loader: () => Promise<News[]>,
+  options: { bypass?: boolean } = {},
+): Promise<News[]> {
   const now = Date.now();
 
-  if (cachedNews && now - cachedAt < CACHE_TTL_MS) {
+  if (!options.bypass && cachedNews && now - cachedAt < CACHE_TTL_MS) {
     return cachedNews;
   }
 
