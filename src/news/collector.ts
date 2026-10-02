@@ -9,6 +9,8 @@ const FEEDS = [
   { source: 'Federal Reserve', url: 'https://www.federalreserve.gov/feeds/press_all.xml' },
 ] as const;
 
+const FEED_TIMEOUT_MS = 8000;
+
 const BULLISH_TERMS = ['rate cut','rate cuts','dovish','lower rates','lower yield','weaker dollar','weak dollar','recession','slowing inflation'] as const;
 const BEARISH_TERMS = ['rate hike','rate hikes','hawkish','higher rates','higher yield','strong dollar','strong usd','sticky inflation'] as const;
 const HIGH_IMPACT_TERMS = ['fomc','fed decision','interest rate','rate decision','cpi','nfp','nonfarm payroll','ppi','inflation'] as const;
@@ -29,6 +31,7 @@ function normalize(item: Parser.Item, source: string): News | null {
   const text = title + ' ' + snippet;
   if (!title || !RELEVANCE_PATTERN.test(text)) return null;
   const publishedAt = item.isoDate ?? item.pubDate ?? new Date().toISOString();
+
   return {
     id: item.guid ?? item.link ?? source + '-' + publishedAt + '-' + title,
     title,
@@ -42,21 +45,48 @@ function normalize(item: Parser.Item, source: string): News | null {
 }
 
 async function collectFeed(source: string, url: string): Promise<News[]> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FEED_TIMEOUT_MS);
+
   try {
-    const feed = await parser.parseURL(url);
-    return (feed.items ?? []).slice(0, 30).map((item) => normalize(item, source)).filter((item): item is News => item !== null);
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        Accept: 'application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.1',
+        'User-Agent': 'NewsXLeak/1.0 (+XAUUSD news intelligence)',
+      },
+      cache: 'no-store',
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const xml = await response.text();
+    const feed = await parser.parseString(xml);
+
+    return (feed.items ?? [])
+      .slice(0, 30)
+      .map((item) => normalize(item, source))
+      .filter((item): item is News => item !== null);
   } catch (error) {
     console.error('[news] feed failed', { source, error });
     return [];
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
 export async function collectNews(): Promise<News[]> {
   const batches = await Promise.all(FEEDS.map((feed) => collectFeed(feed.source, feed.url)));
   const deduped = new Map<string, News>();
+
   for (const item of batches.flat()) {
     const existing = deduped.get(item.id);
-    if (!existing || Date.parse(item.publishedAt) > Date.parse(existing.publishedAt)) deduped.set(item.id, item);
+    if (!existing || Date.parse(item.publishedAt) > Date.parse(existing.publishedAt)) {
+      deduped.set(item.id, item);
+    }
   }
+
   return enrichNews([...deduped.values()]);
 }
