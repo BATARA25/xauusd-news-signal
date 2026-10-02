@@ -40,7 +40,7 @@ function normalize(item: Parser.Item, source: string): News | null {
     publishedAt,
     ...classify(text.toLowerCase()),
     summary: snippet.slice(0, 220),
-    event: detectEvent(text),
+    event: detectEvent(text, publishedAt),
   };
 }
 
