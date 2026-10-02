@@ -86,7 +86,8 @@ async function sendSignal(signal, detectedAt) {
     signalKey: signalKey(signal),
     detectedAt,
     pushSentAt,
-    analysisLatencyMs: Math.max(0, Date.parse(signal.updatedAt) - Date.parse(detectedAt)),
+    analysisLatencyMs: Number.isFinite(signal.analysisLatencyMs) ? signal.analysisLatencyMs : Math.max(0, Date.parse(signal.updatedAt) - Date.parse(detectedAt)),
+    signalLatencyMs: Number.isFinite(signal.signalLatencyMs) ? signal.signalLatencyMs : Math.max(0, Date.parse(signal.updatedAt) - Date.parse(detectedAt)),
     totalServerLatencyMs: Math.max(0, Date.parse(pushSentAt) - Date.parse(detectedAt)),
     sentAt: pushSentAt
   });
@@ -130,7 +131,8 @@ async function poll() {
     });
     if (!response.ok) throw new Error('signal_http_' + response.status);
 
-    const signal = (await response.json())?.signal;
+    const responsePayload = await response.json();
+    const signal = responsePayload?.signal;
     if (!signal || (signal.bias !== 'BUY' && signal.bias !== 'SELL')) return;
 
     const key = signalKey(signal);
@@ -141,7 +143,7 @@ async function poll() {
     state = { ...state, lastSignalKey: key, lastSignalAt: detectedAt };
     await writeJson(STATE_FILE, state);
 
-    const sent = await sendSignal(signal, detectedAt);
+    const sent = await sendSignal({ ...signal, updatedAt: responsePayload.analyzedAt || signal.updatedAt, analysisLatencyMs: responsePayload.analysisLatencyMs, signalLatencyMs: responsePayload.signalLatencyMs }, detectedAt);
     console.log('[signal] new', key, 'rapid', rapid, 'sent', sent);
   } catch (error) {
     lastError = error?.message || String(error);
