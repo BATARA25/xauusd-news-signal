@@ -31,7 +31,11 @@ export function newsWeight(item: News, now = Date.now()): number {
     SIGNAL_CONFIG.minimumRecencyWeight,
     1 - ageHours / SIGNAL_CONFIG.maxAgeHours,
   );
-  return impactWeight * recency;
+  const sourceQuality = item.sourceQuality ?? 0.5;
+  const novelty = item.novelty ?? 1;
+  const marketMoving = item.marketMoving ?? 0.5;
+  const intelligenceMultiplier = 0.7 + sourceQuality * 0.2 + novelty * 0.05 + marketMoving * 0.05;
+  return impactWeight * recency * intelligenceMultiplier;
 }
 
 export function clampUnit(value: number): number {
