@@ -2,22 +2,60 @@
 
 import { useEffect, useState } from 'react';
 
-type News = { id: string; title: string; url: string; source: string; publishedAt: string; impact: 'HIGH'|'MEDIUM'|'LOW'; direction: 'BULLISH'|'BEARISH'|'NEUTRAL'; score: number; summary: string };
-type Signal = { symbol: 'XAUUSD'; bias: 'BUY'|'SELL'|'WAIT'; confidence: number; score: number; impact: 'HIGH'|'MEDIUM'|'LOW'; updatedAt: string; drivers: string[]; highImpactCount: number; sampleSize: number };
-type AISignal = { symbol:'XAUUSD'; bias:'BUY'|'SELL'|'WAIT'; confidence:number; macroRegime:string; reasoning:string; bullishFactors:string[]; bearishFactors:string[]; keyRisks:string[]; invalidation:string; keyEvents:string[]; generatedAt:string };
-
-function timeWIB(value: string) { return new Intl.DateTimeFormat('id-ID',{timeZone:'Asia/Jakarta',dateStyle:'short',timeStyle:'medium'}).format(new Date(value)); }
-
+type News = {
+  id: string; title: string; url: string; source: string; publishedAt: string;
+  impact: 'HIGH'|'MEDIUM'|'LOW'; direction: 'BULLISH'|'BEARISH'|'NEUTRAL';
+  score: number; summary: string;
+};
+type Signal = {
+  symbol: 'XAUUSD'; bias: 'BUY'|'SELL'|'WAIT'; confidence: number; score: number;
+  impact: 'HIGH'|'MEDIUM'|'LOW'; updatedAt: string; drivers: string[];
+  highImpactCount: number; sampleSize: number;
+};
+function timeWIB(value: string) {
+  return new Intl.DateTimeFormat('id-ID',{timeZone:'Asia/Jakarta',dateStyle:'short',timeStyle:'medium'}).format(new Date(value));
+}
 export default function Home() {
-  const [news,setNews] = useState<News[]>([]); const [signal,setSignal] = useState<Signal|null>(null); const [aiSignal,setAiSignal] = useState<AISignal|null>(null); const [live,setLive] = useState(false); const [aiLoading,setAiLoading] = useState(false);
-  const refreshSignal = () => fetch('/api/signal').then(r=>r.json()).then(d=>setSignal(d.signal||null)).catch(()=>{});
-  const refreshAI = () => { setAiLoading(true); fetch('/api/ai-signal').then(r=>r.json()).then(d=>setAiSignal(d.signal||null)).catch(()=>{}).finally(()=>setAiLoading(false)); };
-  useEffect(() => { fetch('/api/news').then(r=>r.json()).then(d=>setNews(d.news||[])).catch(()=>{}); refreshSignal(); refreshAI(); const es=new EventSource('/api/news/stream'); es.onopen=()=>setLive(true); es.onerror=()=>setLive(false); es.onmessage=e=>{ try { const item=JSON.parse(e.data); setNews(prev=>[item,...prev.filter(x=>x.id!==item.id)].slice(0,50)); } catch {} }; const timer=setInterval(refreshSignal,15000); const aiTimer=setInterval(refreshAI,120000); return ()=>{es.close();clearInterval(timer);clearInterval(aiTimer)}; },[]);
-  return <main><header><div><span className="eyebrow">BATARA CAPITAL</span><h1>XAUUSD NEWS SIGNAL</h1><p>Real-time macro intelligence for Gold.</p></div><div className="live"><i className={live?'on':''}/> {live?'LIVE':'CONNECTING'}</div></header><section className="bar"><span>{news.length} monitored events</span><span>Timezone: WIB</span><span>News refresh: 15s</span><span>AI refresh: 2m</span></section>
-    {signal && <section className="signal-panel"><div><small>AGGREGATE MARKET BIAS</small><strong className={signal.bias.toLowerCase()}>{signal.bias}</strong></div><div><small>CONFIDENCE</small><strong>{signal.confidence}%</strong></div><div><small>MACRO SCORE</small><strong>{signal.score}/100</strong></div><div><small>HIGH IMPACT</small><strong>{signal.highImpactCount}</strong></div><div><small>STATUS</small><strong>{signal.impact}</strong></div></section>}
-    {aiSignal && <section className="signal-panel"><div><small>AI MACRO BIAS</small><strong className={aiSignal.bias.toLowerCase()}>{aiSignal.bias}</strong></div><div><small>AI CONFIDENCE</small><strong>{aiSignal.confidence}%</strong></div><div><small>MACRO REGIME</small><strong>{aiSignal.macroRegime}</strong></div><div><small>AI STATUS</small><strong>ONLINE</strong></div><div><small>UPDATED</small><strong>{timeWIB(aiSignal.generatedAt)}</strong></div></section>}
-    {aiSignal && <section className="drivers"><small>AI MACRO REASONING</small><p>{aiSignal.reasoning}</p><div><strong>Bullish:</strong> {aiSignal.bullishFactors.join(' • ') || 'None identified'}</div><div><strong>Bearish:</strong> {aiSignal.bearishFactors.join(' • ') || 'None identified'}</div><div><strong>Risk:</strong> {aiSignal.keyRisks.join(' • ') || 'None identified'}</div><div><strong>Invalidation:</strong> {aiSignal.invalidation}</div>{aiSignal.keyEvents.length>0 && <div><strong>Key events:</strong> {aiSignal.keyEvents.join(' • ')}</div>}</section>}
-    {aiLoading && !aiSignal ? <section className="drivers"><small>AI ENGINE</small><div>Analyzing latest macro news…</div></section> : null}
-    {signal?.drivers.length ? <section className="drivers"><small>TOP MACRO DRIVERS</small>{signal.drivers.map((x,i)=><div key={i}>{x}</div>)}</section> : null}
-    <section className="grid">{news.length===0?<div className="empty">Waiting for market news...</div>:news.map(n=><article className="card" key={n.id}><div className="top"><span className={'impact '+n.impact.toLowerCase()}>{n.impact}</span><span>{timeWIB(n.publishedAt)}</span></div><h2>{n.title}</h2><p>{n.summary}</p><div className="signal"><strong className={n.direction.toLowerCase()}>{n.direction}</strong><span>Impact score {n.score}</span><span>{n.source}</span></div><a href={n.url} target="_blank" rel="noreferrer">Open source ↗</a></article>)}</section></main>;
+  const [news,setNews]=useState<News[]>([]);
+  const [signal,setSignal]=useState<Signal|null>(null);
+  const [live,setLive]=useState(false);
+  const [alert,setAlert]=useState<'BUY'|'SELL'|null>(null);
+  const refresh=()=>fetch('/api/signal',{cache:'no-store'}).then(r=>r.json()).then(d=>{
+    const next=d.signal||null; setSignal(next);
+    if(next?.bias==='BUY'||next?.bias==='SELL') setAlert(next.bias);
+  }).catch(()=>{});
+  useEffect(()=>{
+    fetch('/api/news',{cache:'no-store'}).then(r=>r.json()).then(d=>setNews(d.news||[])).catch(()=>{});
+    refresh();
+    const es=new EventSource('/api/news/stream');
+    es.onopen=()=>setLive(true); es.onerror=()=>setLive(false);
+    es.onmessage=e=>{try{const item=JSON.parse(e.data);setNews(prev=>[item,...prev.filter(x=>x.id!==item.id)].slice(0,50));}catch{}};
+    const timer=setInterval(refresh,15000);
+    return()=>{es.close();clearInterval(timer)};
+  },[]);
+  useEffect(()=>{if(!alert)return;const timer=setTimeout(()=>setAlert(null),7000);return()=>clearTimeout(timer)},[alert]);
+  return <main>
+    {alert&&<div className={'signal-toast '+alert.toLowerCase()} role="status" aria-live="assertive"><span className="toast-dot"/><strong>{alert}</strong><button onClick={()=>setAlert(null)} aria-label="Close signal">×</button></div>}
+    <header className="site-header">
+      <div><div className="brand">NewsXLeak</div><p>Real-time economic news intelligence for XAUUSD.</p></div>
+      <div className="live"><i className={live?'on':''}/>{live?'LIVE':'CONNECTING'}</div>
+    </header>
+    <section className="hero">
+      <div><span className="label">XAUUSD / NEWS SIGNAL</span><h1>News that matters.<br/><em>Signal when it matters.</em></h1><p className="hero-copy">A focused news terminal for high-impact economic releases. Built for fast reading, not information overload.</p></div>
+      <div className="hero-signal"><span className="label">CURRENT SIGNAL</span><strong className={(signal?.bias||'WAIT').toLowerCase()}>{signal?.bias||'WAIT'}</strong><span>{signal?signal.confidence+'% confidence':'Waiting for live data'}</span></div>
+    </section>
+    <section className="quickbar">
+      <div><span>MARKET</span><strong>XAUUSD</strong></div><div><span>IMPACT</span><strong>{signal?.impact||'—'}</strong></div><div><span>EVENTS</span><strong>{signal?.highImpactCount??'—'}</strong></div><div><span>UPDATED</span><strong>{signal?timeWIB(signal.updatedAt):'—'}</strong></div>
+    </section>
+    <section className="section-head"><div><span className="label">LIVE FEED</span><h2>Latest market news</h2></div><span className="feed-status">{news.length} monitored stories</span></section>
+    <section className="news-list">
+      {news.length===0?<div className="empty">Waiting for live market news…</div>:news.map(n=><article className="news-row" key={n.id}>
+        <div className="news-meta"><span className={'impact '+n.impact.toLowerCase()}>{n.impact}</span><span>{n.source}</span><span>{timeWIB(n.publishedAt)}</span></div>
+        <div className="news-main"><h3>{n.title}</h3><p>{n.summary}</p></div>
+        <div className={'direction '+n.direction.toLowerCase()}>{n.direction}</div>
+      </article>)}
+    </section>
+    <section className="method"><div><span className="label">SIGNAL ENGINE</span><h2>80:20 → 40:60</h2></div><p>NewsXLeak separates news context from market confirmation. The signal engine weighs fundamental news first, then validates the direction against live market reaction.</p></section>
+    <footer><span>NewsXLeak</span><span>Signal intelligence, not a profit guarantee.</span></footer>
+  </main>;
 }
