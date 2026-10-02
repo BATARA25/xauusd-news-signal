@@ -7,11 +7,10 @@ const parser = new Parser();
 
 const FEEDS = [
   { source: 'Google News', url: 'https://news.google.com/rss/search?q=XAUUSD%20OR%20gold%20OR%20Federal%20Reserve%20OR%20FOMC&hl=en-US&gl=US&ceid=US:en' },
-  { source: 'Federal Reserve', url: 'https://www.federalreserve.gov/feeds/press_all.xml' },
 ] as const;
 
 const FEED_TIMEOUT_MS = 5000;
-const OFFICIAL_RELEASE_TIMEOUT_MS = 2500;
+const OFFICIAL_RELEASE_TIMEOUT_MS = 2000;
 const BLS_EMPLOYMENT_URL = 'https://www.bls.gov/news.release/empsit.nr0.htm';
 
 const BULLISH_TERMS = ['rate cut','rate cuts','dovish','lower rates','lower yield','weaker dollar','weak dollar','recession','slowing inflation','cooler inflation','soft inflation','rate cuts expected','hike is unlikely','hike unlikely','no urgency to hike','wait before hiking'] as const;
@@ -63,9 +62,7 @@ async function collectFeed(source: string, url: string): Promise<News[]> {
       cache: 'no-store',
     });
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
     const xml = await response.text();
     const feed = await parser.parseString(xml);
@@ -120,8 +117,10 @@ async function collectOfficialEmployment(): Promise<News[]> {
     ].filter(Boolean).join(' · ');
 
     const headline = `Official BLS Employment Situation — ${titleMatch[1]}${details ? ` · ${details}` : ''}`;
+    const eventText = `Employment Situation NFP Nonfarm Payroll unemployment ${details}`;
+
     return [{
-      id: 'bls-employment-situation-' + titleMatch[1].toLowerCase().replace(/\\s+/g, '-'),
+      id: 'bls-employment-situation-' + titleMatch[1].toLowerCase().replace(/\s+/g, '-'),
       title: headline,
       url: BLS_EMPLOYMENT_URL,
       source: 'BLS',
@@ -130,7 +129,7 @@ async function collectOfficialEmployment(): Promise<News[]> {
       direction: 'NEUTRAL',
       score: 50,
       summary: 'Official BLS Employment Situation release detected directly from the BLS publication page.',
-      event: detectEvent('Employment Situation NFP Nonfarm Payroll unemployment', publishedAt),
+      event: detectEvent(eventText, publishedAt),
       sourceTier: 'OFFICIAL',
       sourceQuality: 1,
       novelty: 1,
@@ -149,8 +148,8 @@ async function collectNewsUncached(realtime = false): Promise<News[]> {
     ...FEEDS.map((feed) => collectFeed(feed.source, feed.url)),
     ...(realtime ? [collectOfficialEmployment()] : []),
   ]);
-  const deduped = new Map<string, News>();
 
+  const deduped = new Map<string, News>();
   for (const item of batches.flat()) {
     const existing = deduped.get(item.id);
     if (!existing || Date.parse(item.publishedAt) > Date.parse(existing.publishedAt)) {
@@ -161,7 +160,7 @@ async function collectNewsUncached(realtime = false): Promise<News[]> {
   return enrichNews([...deduped.values()]);
 }
 
-
 export async function collectNews(options: { realtime?: boolean } = {}): Promise<News[]> {
-  return withNewsCache(() => collectNewsUncached(options.realtime === true), { bypass: options.realtime === true });
+  const realtime = options.realtime === true;
+  return withNewsCache(() => collectNewsUncached(realtime), { realtime });
 }
