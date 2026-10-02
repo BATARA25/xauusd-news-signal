@@ -33,7 +33,7 @@ export default function Home() {
     const timer=setInterval(refresh,15000);
     return()=>{es.close();clearInterval(timer)};
   },[]);
-  useEffect(()=>{if(!alert)return;const timer=setTimeout(()=>setAlert(null),7000);return()=>clearTimeout(timer)},[alert]);
+  useEffect(()=>{document.title='NewsXLeak — XAUUSD News Intelligence';if(!alert)return;const timer=setTimeout(()=>setAlert(null),7000);return()=>clearTimeout(timer)},[alert]);
   return <div className="newsx-wrap"><main>
     {alert&&<div className={'signal-toast '+alert.toLowerCase()} role="status" aria-live="assertive"><span className="toast-dot"/><strong>{alert}</strong><button onClick={()=>setAlert(null)} aria-label="Close signal">×</button></div>}
     <header className="site-header">
