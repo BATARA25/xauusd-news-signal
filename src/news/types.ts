@@ -1,6 +1,16 @@
 export type NewsImpact = 'HIGH' | 'MEDIUM' | 'LOW';
 export type NewsDirection = 'BULLISH' | 'BEARISH' | 'NEUTRAL';
 
+export type NewsEvent = {
+  id: string;
+  name: string;
+  releaseAt?: string;
+  actual?: number;
+  forecast?: number;
+  previous?: number;
+  unit?: string;
+};
+
 export type News = {
   id: string;
   title: string;
@@ -11,4 +21,5 @@ export type News = {
   direction: NewsDirection;
   score: number;
   summary: string;
+  event?: NewsEvent;
 };
