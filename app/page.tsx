@@ -123,13 +123,14 @@ export default function Home() {
       setSignal(next);
       setLive(true);
 
-      const key = next.bias + ':' + (next.eventReleaseAt ?? next.eventName ?? '') + ':' + next.phase;
+      const key = next.bias + ':' + (next.eventReleaseAt ?? next.eventName ?? 'CONTEXT');
       if ((next.bias === 'BUY' || next.bias === 'SELL') && key !== previousKey.current) {
         setAlert(next.bias);
         const entry = priceRef.current?.price;
         if (entry && Number.isFinite(entry)) {
           const existing = JSON.parse(localStorage.getItem(AUDIT_KEY) ?? '[]') as Audit[];
-          if (!existing.some((item) => item.id === key)) {
+          const existingTrade = existing.find((item) => item.id === key);
+          if (!existingTrade) {
             saveAudits([{
               id: key,
               timestamp: new Date().toISOString(),
