@@ -22,10 +22,13 @@ type Signal = {
   symbol: 'XAUUSD';
   bias: 'BUY' | 'SELL' | 'WAIT';
   confidence: number;
+  evidenceScore: number;
   score: number;
   impact: 'HIGH' | 'MEDIUM' | 'LOW';
   phase?: 'PRE_RELEASE' | 'POST_RELEASE' | 'CONTEXT';
   eventName?: string;
+  eventReleaseAt?: string;
+  components?: { context: number; confirmation: number; surprise: number; reaction: number };
   updatedAt: string;
   drivers: string[];
   highImpactCount: number;
@@ -40,12 +43,16 @@ function timeWIB(value: string) {
   }).format(new Date(value));
 }
 
+function percent(value: number | undefined) {
+  return value === undefined ? '—' : Math.round(value * 100) + '%';
+}
+
 export default function Home() {
   const [news, setNews] = useState<News[]>([]);
   const [signal, setSignal] = useState<Signal | null>(null);
   const [live, setLive] = useState(false);
   const [alert, setAlert] = useState<'BUY' | 'SELL' | null>(null);
-  const previousBias = useRef<Signal['bias']>('WAIT');
+  const previousKey = useRef('WAIT:');
 
   const refresh = async () => {
     try {
@@ -67,12 +74,11 @@ export default function Home() {
         setSignal(next);
         setLive(true);
 
-        if (next.bias === 'BUY' || next.bias === 'SELL') {
-          if (next.bias !== previousBias.current) {
-            setAlert(next.bias);
-          }
+        const key = next.bias + ':' + (next.eventReleaseAt ?? next.eventName ?? '');
+        if ((next.bias === 'BUY' || next.bias === 'SELL') && key !== previousKey.current) {
+          setAlert(next.bias);
         }
-        previousBias.current = next.bias;
+        previousKey.current = key;
       } else {
         setLive(false);
       }
@@ -84,7 +90,6 @@ export default function Home() {
   useEffect(() => {
     document.title = 'NewsXLeak — XAUUSD News Intelligence';
     void refresh();
-
     const timer = window.setInterval(() => void refresh(), 15000);
     return () => window.clearInterval(timer);
   }, []);
@@ -113,19 +118,14 @@ export default function Home() {
             <div className="brand">NewsXLeak</div>
             <p>Real-time economic news intelligence for XAUUSD.</p>
           </div>
-          <div className="live">
-            <i className={live ? 'on' : ''} />
-            {live ? 'LIVE' : 'CONNECTING'}
-          </div>
+          <div className="live"><i className={live ? 'on' : ''} />{live ? 'LIVE' : 'CONNECTING'}</div>
         </header>
 
         <section className="hero">
           <div>
             <span className="label">XAUUSD / NEWS SIGNAL</span>
             <h1>News that matters.<br /><em>Signal when it matters.</em></h1>
-            <p className="hero-copy">
-              A focused news terminal for high-impact economic releases. Built for fast reading, not information overload.
-            </p>
+            <p className="hero-copy">A focused news terminal for high-impact economic releases. Built for fast reading, not information overload.</p>
           </div>
           <div className="hero-signal">
             <span className="label">CURRENT SIGNAL</span>
@@ -138,14 +138,25 @@ export default function Home() {
           <div><span>MARKET</span><strong>XAUUSD</strong></div>
           <div><span>IMPACT</span><strong>{signal?.impact ?? '—'}</strong></div>
           <div><span>PHASE</span><strong>{signal?.phase ?? '—'}</strong></div>
-          <div><span>UPDATED</span><strong>{signal ? timeWIB(signal.updatedAt) : '—'}</strong></div>
+          <div><span>EVIDENCE</span><strong>{signal ? signal.evidenceScore + '%' : '—'}</strong></div>
+        </section>
+
+        <section className="method">
+          <div>
+            <span className="label">ENGINE STATE</span>
+            <h2>{signal?.eventName ?? 'Context monitoring'}</h2>
+          </div>
+          <p>
+            {signal?.phase === 'PRE_RELEASE'
+              ? '80:20 pre-release weighting: context 80%, high-impact confirmation 20%.'
+              : signal?.phase === 'POST_RELEASE'
+                ? '40:60 post-release weighting: surprise 40%, observed reaction 60%.'
+                : 'Context mode: no active release window. The engine avoids forcing a directional macro call.'}
+          </p>
         </section>
 
         <section className="section-head">
-          <div>
-            <span className="label">LIVE FEED</span>
-            <h2>Latest market news</h2>
-          </div>
+          <div><span className="label">LIVE FEED</span><h2>Latest market news</h2></div>
           <span className="feed-status">{news.length} monitored stories</span>
         </section>
 
@@ -171,11 +182,12 @@ export default function Home() {
         </section>
 
         <section className="method">
-          <div>
-            <span className="label">SIGNAL ENGINE</span>
-            <h2>80:20 → 40:60</h2>
-          </div>
-          <p>Pre-release context uses the 80:20 weighting. After a structured release, the engine shifts to 40:60 surprise versus reaction.</p>
+          <div><span className="label">SIGNAL AUDIT</span><h2>Evidence & reaction</h2></div>
+          <p>
+            Sample {signal?.sampleSize ?? 0} · High impact {signal?.highImpactCount ?? 0} ·
+            Context {percent(signal?.components?.context)} · Surprise {percent(signal?.components?.surprise)} ·
+            Reaction {percent(signal?.components?.reaction)}
+          </p>
         </section>
 
         <footer>
