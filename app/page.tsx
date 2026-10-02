@@ -210,7 +210,7 @@ export default function Home() {
       a.timestamp, a.bias, a.eventName ?? '', a.phase ?? '', a.confidence,
       a.evidenceScore, a.entry, a.prices['5m'] ?? '', a.prices['15m'] ?? '',
       a.prices['30m'] ?? '', a.prices['60m'] ?? ''
-    ].map((v) => '"' + String(v).replaceAll('"', '""') + '"').join(',')).join('\n');
+    ].map((v) => '"' + String(v).replace(/"/g, '""') + '"').join(',')).join('\n');
     const blob = new Blob([header + rows], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
