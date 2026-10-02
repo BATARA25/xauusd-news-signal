@@ -67,3 +67,23 @@ footer{display:flex;justify-content:space-between;padding-top:25px;color:#626c78
  footer{gap:15px;flex-direction:column}
  .signal-toast{top:12px;left:50%;right:auto;transform:translateX(-50%);width:min(330px,calc(100vw - 24px))}
 }
+
+
+.signal-focus {
+  margin: 1.5rem 0;
+  padding: 2rem;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 20px;
+  text-align: center;
+  background: rgba(255,255,255,.025);
+}
+.focus-bias {
+  font-size: clamp(4rem, 18vw, 9rem);
+  line-height: .9;
+  font-weight: 900;
+  letter-spacing: -.07em;
+  margin: 1rem 0;
+}
+.focus-bias.buy { color: #34d399; }
+.focus-bias.sell { color: #fb7185; }
+.focus-bias.wait { color: #a1a1aa; }
