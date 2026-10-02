@@ -2,6 +2,8 @@
 
 > Real-time economic news intelligence for XAUUSD.
 
+Production URL: https://xauusd-news-signal-4i2p.vercel.app
+
 NewsXLeak is a focused macro-news dashboard for monitoring high-impact economic releases and translating validated news context into a simple **BUY / SELL / WAIT** directional signal for XAUUSD.
 
 The product is designed around one principle: **reduce the time between an important economic release and a clear, auditable market signal without turning the interface into a crowded trading terminal.**
@@ -10,6 +12,7 @@ The product is designed around one principle: **reduce the time between an impor
 
 - XAUUSD-first macro news monitoring
 - Normalized RSS/news collection
+- Official Federal Reserve and BLS feeds for core U.S. macro releases
 - Gold-relevance filtering
 - Deterministic macro classification
 - 80:20 pre-news context framework
@@ -62,7 +65,7 @@ The weighting model is a product rule, not a guarantee of future performance.
 - React 19
 - TypeScript
 - RSS Parser
-- Server-Sent Events
+- Short-interval API polling
 - Node.js
 - Docker/Railway-compatible deployment
 
@@ -74,7 +77,6 @@ The weighting model is a product rule, not a guarantee of future performance.
 │   ├── api/
 │   │   ├── health/
 │   │   ├── news/
-│   │   ├── news/stream/
 │   │   └── signal/
 │   ├── globals.css
 │   ├── layout.tsx
@@ -132,10 +134,9 @@ npm run build
 | `GET /` | NewsXLeak dashboard |
 | `GET /api/health` | Service health |
 | `GET /api/news` | Latest normalized news |
-| `GET /api/news/stream` | SSE live news stream |
 | `GET /api/signal` | Current XAUUSD signal |
 
-## Runtime reliability\n\nThe dashboard polls the APIs every 15 seconds. The news collector uses a short in-process cache and request coalescing so `/api/news` and `/api/signal` do not independently hammer upstream RSS feeds when they refresh at the same time. This cache is intentionally small and non-authoritative; each deployment instance may have its own cache.\n\n## Engineering principles
+## Runtime reliability\n\nThe production dashboard is served from the Vercel project URL above. The dashboard polls the APIs every 15 seconds. The news collector uses a short in-process cache and request coalescing so `/api/news` and `/api/signal` do not independently hammer upstream RSS feeds when they refresh at the same time. This cache is intentionally small and non-authoritative; each deployment instance may have its own cache.\n\n## Engineering principles
 
 1. Signal integrity over visual noise.
 2. Server-side secrets only.
