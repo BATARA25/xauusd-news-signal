@@ -49,6 +49,13 @@ export const ECONOMIC_SCHEDULE_2026: ScheduledEconomicEvent[] = [
   { id: 'US_PCE', name: 'US PCE', releaseAt: '2026-10-29T08:30:00-04:00' },
   { id: 'US_PCE', name: 'US PCE', releaseAt: '2026-11-25T08:30:00-05:00' },
   { id: 'US_PCE', name: 'US PCE', releaseAt: '2026-12-23T08:30:00-05:00' },
+  
+  { id: 'US_RETAIL_SALES', name: 'US Retail Sales', releaseAt: '2026-07-16T08:30:00-04:00' },
+  { id: 'US_RETAIL_SALES', name: 'US Retail Sales', releaseAt: '2026-08-14T08:30:00-04:00' },
+  { id: 'US_RETAIL_SALES', name: 'US Retail Sales', releaseAt: '2026-09-16T08:30:00-04:00' },
+  { id: 'US_RETAIL_SALES', name: 'US Retail Sales', releaseAt: '2026-10-15T08:30:00-04:00' },
+  { id: 'US_RETAIL_SALES', name: 'US Retail Sales', releaseAt: '2026-11-17T08:30:00-05:00' },
+  { id: 'US_RETAIL_SALES', name: 'US Retail Sales', releaseAt: '2026-12-16T08:30:00-05:00' },
 ];
 
 export function nearestScheduledEvent(id: string, referenceAt: string, windowDays = 45): ScheduledEconomicEvent | undefined {
