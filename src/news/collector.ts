@@ -96,12 +96,12 @@ async function collectOfficialEmployment(): Promise<News[]> {
 
     const html = await response.text();
     const text = html
-      .replace(/<script[\\s\\S]*?<\\/script>/gi, ' ')
-      .replace(/<style[\\s\\S]*?<\\/style>/gi, ' ')
+      .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+      .replace(/<style[\s\S]*?<\/style>/gi, ' ')
       .replace(/<[^>]+>/g, ' ')
       .replace(/&nbsp;/gi, ' ')
       .replace(/&amp;/gi, '&')
-      .replace(/\\s+/g, ' ')
+      .replace(/\s+/g, ' ')
       .trim();
 
     const titleMatch = text.match(/THE EMPLOYMENT SITUATION - ([A-Z]+ 2026)/i);
