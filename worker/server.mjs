@@ -8,6 +8,8 @@ const BASE_URL = process.env.NEWSXLEAK_BASE_URL || 'https://newsxleak-web-produc
 const PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
 const PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
 const SUBJECT = process.env.VAPID_SUBJECT || 'mailto:newsxleak@proton.me';
+const PUSH_TEST_SECRET = process.env.PUSH_TEST_SECRET || '';
+let lastTestAt = 0;
 const DATA_DIR = process.env.DATA_DIR || '/data';
 const DATA_FILE = path.join(DATA_DIR, 'subscriptions.json');
 const STATE_FILE = path.join(DATA_DIR, 'state.json');
@@ -126,7 +128,7 @@ async function poll() {
     const suffix = rapid ? '?realtime=1' : '';
     const response = await fetch(BASE_URL + '/api/signal' + suffix, {
       cache: 'no-store',
-      signal: AbortSignal.timeout(9000),
+      signal: AbortSignal.timeout(20_000),
       headers: { Accept: 'application/json' }
     });
     if (!response.ok) throw new Error('signal_http_' + response.status);
@@ -171,6 +173,32 @@ const server = http.createServer(async (req, res) => {
       lastSignalKey,
       lastError
     }));
+    return;
+  }
+
+  if (req.method === 'POST' && req.url === '/test') {
+    if (!PUSH_TEST_SECRET || req.headers['x-newsxleak-test-secret'] !== PUSH_TEST_SECRET) {
+      res.writeHead(403, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: false, error: 'forbidden' }));
+      return;
+    }
+    if (Date.now() - lastTestAt < 30_000) {
+      res.writeHead(429, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: false, error: 'test_rate_limited' }));
+      return;
+    }
+    lastTestAt = Date.now();
+    const items = await readSubscriptions();
+    const payload = JSON.stringify({ type: 'XAUUSD_PUSH_TEST', bias: 'BUY', confidence: 100, eventName: 'Android Push Test', signalKey: 'TEST-' + Date.now() });
+    const keep = [];
+    let sent = 0;
+    for (const subscription of items) {
+      try { await webpush.sendNotification(subscription, payload); keep.push(subscription); sent += 1; }
+      catch (error) { if (error?.statusCode !== 404 && error?.statusCode !== 410) keep.push(subscription); console.error('[push-test] send failed', error?.statusCode || error?.message || error); }
+    }
+    if (keep.length !== items.length) await writeJson(DATA_FILE, keep);
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({ ok: true, subscribers: keep.length, sent }));
     return;
   }
 
