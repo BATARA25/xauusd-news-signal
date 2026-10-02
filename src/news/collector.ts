@@ -95,6 +95,6 @@ async function collectNewsUncached(): Promise<News[]> {
 }
 
 
-export async function collectNews(): Promise<News[]> {
-  return withNewsCache(collectNewsUncached);
+export async function collectNews(options: { realtime?: boolean } = {}): Promise<News[]> {
+  return withNewsCache(collectNewsUncached, { bypass: options.realtime === true });
 }
