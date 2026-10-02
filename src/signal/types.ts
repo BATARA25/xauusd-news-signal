@@ -10,9 +10,22 @@ export type SignalComponents = {
   reaction: number;
 };
 
+export type IntradaySetup = {
+  status: 'ACTIVE' | 'WAIT';
+  side: 'BUY' | 'SELL' | 'WAIT';
+  entryLow?: number;
+  entryHigh?: number;
+  stopLoss?: number;
+  takeProfit1?: number;
+  takeProfit2?: number;
+  trigger: string;
+  note: string;
+};
+
 export type MarketSignal = {
   symbol: 'XAUUSD';
   bias: SignalBias;
+  dailyBias: SignalBias;
   confidence: number;
   evidenceScore: number;
   score: number;
@@ -22,6 +35,9 @@ export type MarketSignal = {
   eventName?: string;
   eventReleaseAt?: string;
   components: SignalComponents;
+  intradaySetup: IntradaySetup;
+  price?: number;
+  priceUpdatedAt?: string;
   updatedAt: string;
   drivers: string[];
   highImpactCount: number;
