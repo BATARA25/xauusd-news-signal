@@ -1,1 +1,62 @@
-*{box-sizing:border-box}html,body{margin:0;background:#07090d;color:#f5f7fa;font-family:Inter,Arial,sans-serif}body{min-height:100vh}main{max-width:1200px;margin:auto;padding:32px 20px 60px}header{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;border-bottom:1px solid #20252d;padding-bottom:26px}.eyebrow{font-size:11px;letter-spacing:.2em;color:#8b95a5}h1{font-size:clamp(28px,5vw,48px);margin:8px 0 6px;letter-spacing:-.04em}header p{margin:0;color:#8f98a7}.live{display:flex;align-items:center;gap:8px;font-size:11px;letter-spacing:.12em}.live i{width:8px;height:8px;border-radius:50%;background:#777}.live i.on{background:#45e08b;box-shadow:0 0 12px #45e08b}.bar{display:flex;gap:24px;padding:18px 0;color:#7e8898;font-size:12px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}.card,.empty{background:#0d1117;border:1px solid #1d242d;border-radius:14px;padding:18px}.top,.signal{display:flex;justify-content:space-between;gap:10px;align-items:center;color:#788292;font-size:11px}.impact{padding:4px 8px;border-radius:5px;font-weight:700}.high{background:#3b1b20;color:#ff7b86}.medium{background:#3b3218;color:#f3c969}.low{background:#182b25;color:#75d6a5}.card h2{font-size:17px;line-height:1.35;margin:16px 0 9px}.card p{color:#9ca5b2;font-size:13px;line-height:1.55;min-height:42px}.signal{border-top:1px solid #1d242d;border-bottom:1px solid #1d242d;padding:12px 0;margin:15px 0}.bullish{color:#53d58d}.bearish{color:#ff6f7d}.neutral{color:#b5bdc9}.card a{color:#cbd2dc;text-decoration:none;font-size:12px}.empty{text-align:center;color:#778191;padding:50px}@media(max-width:600px){main{padding:22px 14px}header{flex-direction:column}.bar{flex-wrap:wrap}}
+*{box-sizing:border-box}
+:root{color-scheme:dark}
+html,body{margin:0;background:#07090c;color:#f5f7fa;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+body{min-height:100vh}
+button{font:inherit}
+.newsx-wrap{min-height:100vh;background:#07090c}
+.newsx-wrap main{max-width:1180px;margin:auto;padding:22px 24px 60px}
+.site-header{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;border-bottom:1px solid #20262e;padding-bottom:26px}
+.brand{font-size:24px;font-weight:760;letter-spacing:-.03em}
+.site-header p{margin:5px 0 0;color:#8c95a1;font-size:13px}
+.live{display:flex;align-items:center;gap:8px;color:#89929e;font-size:10px;letter-spacing:.14em}
+.live i{width:7px;height:7px;border-radius:50%;background:#69727d}
+.live i.on{background:#4ee58d;box-shadow:0 0 12px rgba(78,229,141,.55)}
+.label{font-size:10px;letter-spacing:.18em;color:#737d89}
+.hero{display:grid;grid-template-columns:1fr 260px;gap:30px;padding:64px 0 46px;align-items:end}
+.hero h1{font-size:clamp(38px,6vw,70px);line-height:.98;letter-spacing:-.065em;margin:12px 0 18px}
+.hero h1 em{font-style:normal;color:#818a96}
+.hero-copy{max-width:560px;color:#8c95a1;line-height:1.6;font-size:14px}
+.hero-signal{border-left:1px solid #252b32;padding-left:25px}
+.hero-signal strong{display:block;font-size:44px;line-height:1;margin:10px 0}
+.hero-signal span:last-child{color:#7f8995;font-size:12px}
+.buy{color:#4ee58d}.sell{color:#ff6978}.wait{color:#b8c0c9}
+.quickbar{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid #20262e;border-bottom:1px solid #20262e}
+.quickbar div{padding:16px 18px;border-right:1px solid #20262e}
+.quickbar div:last-child{border-right:0}
+.quickbar span{display:block;color:#707a87;font-size:9px;letter-spacing:.15em;margin-bottom:7px}
+.quickbar strong{font-size:12px;color:#dce1e7;font-weight:600}
+.section-head{display:flex;justify-content:space-between;align-items:end;margin:52px 0 18px}
+.section-head h2,.method h2{margin:8px 0 0;font-size:22px;letter-spacing:-.035em}
+.feed-status{font-size:11px;color:#69737f}
+.news-list{border-top:1px solid #20262e}
+.news-row{display:grid;grid-template-columns:155px 1fr 100px;gap:24px;padding:20px 0;border-bottom:1px solid #1c2229}
+.news-meta{display:flex;flex-direction:column;gap:7px;color:#69737f;font-size:10px}
+.impact{align-self:flex-start;padding:4px 7px;border-radius:5px;font-size:9px;font-weight:700;letter-spacing:.05em}
+.impact.high{background:#32191d;color:#ff7b86}.impact.medium{background:#332b18;color:#e7c567}.impact.low{background:#172820;color:#75d6a5}
+.news-main h3{font-size:15px;line-height:1.4;margin:0 0 7px;font-weight:600}
+.news-main p{margin:0;color:#858f9b;font-size:12px;line-height:1.55}
+.direction{text-align:right;font-size:10px;font-weight:700;letter-spacing:.06em;padding-top:2px}
+.direction.bullish{color:#53d58d}.direction.bearish{color:#ff6f7d}.direction.neutral{color:#929ba7}
+.empty{padding:50px 0;text-align:center;color:#6f7985;font-size:13px}
+.method{display:grid;grid-template-columns:260px 1fr;gap:30px;margin-top:55px;padding:24px 0;border-top:1px solid #20262e;border-bottom:1px solid #20262e}
+.method p{margin:0;max-width:650px;color:#858f9b;font-size:12px;line-height:1.7}
+footer{display:flex;justify-content:space-between;padding-top:25px;color:#626c78;font-size:10px}
+.signal-toast{position:fixed;top:18px;right:18px;z-index:10000;width:220px;display:flex;align-items:center;gap:12px;padding:14px;border:1px solid #293038;border-radius:12px;background:rgba(12,15,19,.97);box-shadow:0 14px 40px rgba(0,0,0,.38)}
+.signal-toast strong{font-size:22px}
+.signal-toast button{margin-left:auto;border:0;background:none;color:#77818d;font-size:20px;cursor:pointer}
+.signal-toast.buy{border-color:#255a40}.signal-toast.sell{border-color:#663039}
+.toast-dot{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
+.signal-toast.buy .toast-dot{background:#4ee58d}.signal-toast.sell .toast-dot{background:#ff6978}
+@media(max-width:720px){
+ .newsx-wrap main{padding:16px 15px 45px}
+ .hero{grid-template-columns:1fr;padding:42px 0 30px}
+ .hero-signal{border-left:0;border-top:1px solid #252b32;padding:18px 0 0}
+ .quickbar{grid-template-columns:repeat(2,1fr)}
+ .quickbar div:nth-child(2){border-right:0}
+ .quickbar div:nth-child(-n+2){border-bottom:1px solid #20262e}
+ .news-row{grid-template-columns:1fr;gap:10px}
+ .direction{text-align:left}
+ .method{grid-template-columns:1fr;gap:16px}
+ footer{gap:15px;flex-direction:column}
+ .signal-toast{top:12px;left:50%;right:auto;transform:translateX(-50%);width:min(330px,calc(100vw - 24px))}
+}
