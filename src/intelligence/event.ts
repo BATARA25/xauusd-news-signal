@@ -1,4 +1,5 @@
 import type { NewsEvent } from '../news/types';
+import { nearestScheduledEvent } from './schedule';
 
 const EVENT_PATTERNS: Array<{ pattern: RegExp; name: string; id: string }> = [
   { pattern: /non[- ]farm payroll|\bnfp\b|payrolls?/i, name: 'US Nonfarm Payrolls', id: 'US_NFP' },
@@ -11,7 +12,11 @@ const EVENT_PATTERNS: Array<{ pattern: RegExp; name: string; id: string }> = [
   { pattern: /pce price index|\bpce\b/i, name: 'US PCE', id: 'US_PCE' },
 ];
 
-export function detectEvent(text: string): NewsEvent | undefined {
+export function detectEvent(text: string, publishedAt = new Date().toISOString()): NewsEvent | undefined {
   const match = EVENT_PATTERNS.find((event) => event.pattern.test(text));
-  return match ? { id: match.id, name: match.name } : undefined;
+  if (!match) return undefined;
+  const scheduled = nearestScheduledEvent(match.id, publishedAt);
+  return scheduled
+    ? { id: match.id, name: match.name, releaseAt: scheduled.releaseAt }
+    : { id: match.id, name: match.name };
 }
