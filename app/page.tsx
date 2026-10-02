@@ -67,9 +67,10 @@ export default function Home() {
         setSignal(next);
         setLive(true);
 
-        const isDirectional = next.bias === 'BUY' || next.bias === 'SELL';
-        if (isDirectional && next.bias !== previousBias.current) {
-          setAlert(next.bias);
+        if (next.bias === 'BUY' || next.bias === 'SELL') {
+          if (next.bias !== previousBias.current) {
+            setAlert(next.bias);
+          }
         }
         previousBias.current = next.bias;
       } else {
