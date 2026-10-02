@@ -35,6 +35,11 @@ type Signal = {
   sampleSize: number;
 };
 
+type InstallPromptEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
+};
+
 function timeWIB(value: string) {
   return new Intl.DateTimeFormat('id-ID', {
     timeZone: 'Asia/Jakarta',
@@ -52,6 +57,7 @@ export default function Home() {
   const [signal, setSignal] = useState<Signal | null>(null);
   const [live, setLive] = useState(false);
   const [alert, setAlert] = useState<'BUY' | 'SELL' | null>(null);
+  const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
   const previousKey = useRef('WAIT:');
 
   const refresh = async () => {
@@ -89,9 +95,24 @@ export default function Home() {
 
   useEffect(() => {
     document.title = 'NewsXLeak — XAUUSD News Intelligence';
+
+    if ('serviceWorker' in navigator) {
+      void navigator.serviceWorker.register('/sw.js', { scope: '/' });
+    }
+
+    const onInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      setInstallPrompt(event as InstallPromptEvent);
+    };
+
+    window.addEventListener('beforeinstallprompt', onInstallPrompt);
     void refresh();
     const timer = window.setInterval(() => void refresh(), 15000);
-    return () => window.clearInterval(timer);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', onInstallPrompt);
+      window.clearInterval(timer);
+    };
   }, []);
 
   useEffect(() => {
@@ -99,6 +120,13 @@ export default function Home() {
     const timer = window.setTimeout(() => setAlert(null), 7000);
     return () => window.clearTimeout(timer);
   }, [alert]);
+
+  const installApp = async () => {
+    if (!installPrompt) return;
+    await installPrompt.prompt();
+    await installPrompt.userChoice;
+    setInstallPrompt(null);
+  };
 
   const bias = signal?.bias ?? 'WAIT';
 
@@ -118,7 +146,14 @@ export default function Home() {
             <div className="brand">NewsXLeak</div>
             <p>Real-time economic news intelligence for XAUUSD.</p>
           </div>
-          <div className="live"><i className={live ? 'on' : ''} />{live ? 'LIVE' : 'CONNECTING'}</div>
+          <div className="header-actions">
+            {installPrompt && (
+              <button className="install-button" onClick={() => void installApp()}>
+                INSTALL APP
+              </button>
+            )}
+            <div className="live"><i className={live ? 'on' : ''} />{live ? 'LIVE' : 'CONNECTING'}</div>
+          </div>
         </header>
 
         <section className="hero">
