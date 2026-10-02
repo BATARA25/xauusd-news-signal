@@ -2,20 +2,23 @@ import type { News } from '../news/types';
 
 export const SIGNAL_CONFIG = {
   sampleSize: 30,
-  maxAgeHours: 48,
-  minimumRecencyWeight: 0.35,
-  highImpactWeight: 3,
-  mediumImpactWeight: 2,
-  lowImpactWeight: 1,
-  waitThreshold: 0.12,
-  maxConfidence: 95,
-  minConfidence: 20,
-  preReleaseContextWeight: 0.8,
-  preReleaseConfirmationWeight: 0.2,
-  postReleaseSurpriseWeight: 0.4,
-  postReleaseReactionWeight: 0.6,
+  maxAgeHours: 24,
+  minimumRecencyWeight: 0.25,
+  highImpactWeight: 3.5,
+  mediumImpactWeight: 1.8,
+  lowImpactWeight: 0.7,
+  waitThreshold: 0.16,
+  maxConfidence: 92,
+  minConfidence: 25,
+  preReleaseContextWeight: 0.65,
+  preReleaseConfirmationWeight: 0.35,
+  postReleaseSurpriseWeight: 0.55,
+  postReleaseReactionWeight: 0.45,
   postReleaseWindowMinutes: 60,
   preReleaseWindowMinutes: 24 * 60,
+  minimumDirectionalSources: 2,
+  minimumDirectionalItems: 3,
+  conflictAgreementThreshold: 0.60,
 } as const;
 
 export function newsWeight(item: News, now = Date.now()): number {
@@ -43,18 +46,16 @@ export function clampUnit(value: number): number {
   return Math.max(-1, Math.min(1, Number.isFinite(value) ? value : 0));
 }
 
-/**
- * Converts a macro release surprise into a directional XAUUSD heuristic.
- * Stronger US activity/inflation/rates are treated as negative for gold;
- * weaker readings are treated as positive. This is a directional model,
- * not a guarantee of price response.
- */
 export function releaseSurpriseDirection(actual?: number, forecast?: number, eventName = ''): number {
   if (!Number.isFinite(actual) || !Number.isFinite(forecast)) return 0;
   const expected = Number(forecast);
   if (expected === 0) return 0;
   const raw = clampUnit((Number(actual) - expected) / Math.max(Math.abs(expected), 1));
   const name = eventName.toLowerCase();
+
+  // Macro releases are not all monotonic. This is intentionally limited to
+  // the releases for which a stronger-than-expected print usually changes
+  // the rate path in the gold-negative direction.
   const goldNegative = /cpi|inflation|ppi|rate|interest|yield|payroll|nfp|employment|jobs|gdp|retail sales|pmi/.test(name);
   return goldNegative ? -raw : raw;
 }
