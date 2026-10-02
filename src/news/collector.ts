@@ -7,10 +7,14 @@ const parser = new Parser();
 
 const FEEDS = [
   { source: 'Google News', url: 'https://news.google.com/rss/search?q=XAUUSD%20OR%20gold%20OR%20Federal%20Reserve%20OR%20FOMC&hl=en-US&gl=US&ceid=US:en' },
+  { source: 'Reuters via Google News', url: 'https://news.google.com/rss/search?q=XAUUSD%20OR%20gold%20OR%20Federal%20Reserve%20OR%20FOMC%20when:1d%20site:reuters.com&hl=en-US&gl=US&ceid=US:en' },
+  { source: 'CNBC via Google News', url: 'https://news.google.com/rss/search?q=XAUUSD%20OR%20gold%20OR%20Federal%20Reserve%20OR%20FOMC%20when:1d%20site:cnbc.com&hl=en-US&gl=US&ceid=US:en' },
+  { source: 'Kitco via Google News', url: 'https://news.google.com/rss/search?q=gold%20OR%20XAUUSD%20when:1d%20site:kitco.com&hl=en-US&gl=US&ceid=US:en' },
+  { source: 'FXStreet via Google News', url: 'https://news.google.com/rss/search?q=gold%20OR%20XAUUSD%20OR%20dollar%20OR%20Fed%20when:1d%20site:fxstreet.com&hl=en-US&gl=US&ceid=US:en' },
 ] as const;
 
 const FEED_TIMEOUT_MS = 5000;
-const OFFICIAL_RELEASE_TIMEOUT_MS = 2000;
+const OFFICIAL_RELEASE_TIMEOUT_MS = 3000;
 const BLS_EMPLOYMENT_URL = 'https://www.bls.gov/news.release/empsit.nr0.htm';
 
 const BULLISH_TERMS = ['rate cut','rate cuts','dovish','lower rates','lower yield','weaker dollar','weak dollar','recession','slowing inflation','cooler inflation','soft inflation','rate cuts expected','hike is unlikely','hike unlikely','no urgency to hike','wait before hiking'] as const;
@@ -23,9 +27,18 @@ function classify(text: string): Pick<News, 'impact' | 'direction' | 'score'> {
   const bullish = BULLISH_TERMS.filter((term) => text.includes(term)).length;
   const negatedBearish = NEGATED_BEARISH_TERMS.filter((term) => text.includes(term)).length;
   const bearish = Math.max(0, BEARISH_TERMS.filter((term) => text.includes(term)).length - negatedBearish);
-  const direction: NewsDirection = bullish > bearish ? 'BULLISH' : bearish > bullish ? 'BEARISH' : 'NEUTRAL';
-  const impact: NewsImpact = HIGH_IMPACT_TERMS.some((term) => text.includes(term)) ? 'HIGH' : bullish + bearish > 0 ? 'MEDIUM' : 'LOW';
-  const score = Math.min(100, Math.max(0, Math.round(50 + (bullish - bearish) * 18 + (impact === 'HIGH' ? 20 : impact === 'MEDIUM' ? 8 : 0))));
+  const net = bullish - bearish;
+  const direction: NewsDirection = net > 0 ? 'BULLISH' : net < 0 ? 'BEARISH' : 'NEUTRAL';
+
+  // score measures directional strength only. Impact is deliberately kept
+  // separate so a HIGH-impact bearish story cannot be pulled toward 50.
+  const score = Math.min(100, Math.max(0, Math.round(50 + net * 18)));
+  const impact: NewsImpact = HIGH_IMPACT_TERMS.some((term) => text.includes(term))
+    ? 'HIGH'
+    : Math.abs(net) > 0
+      ? 'MEDIUM'
+      : 'LOW';
+
   return { impact, direction, score };
 }
 
@@ -36,11 +49,14 @@ function normalize(item: Parser.Item, source: string): News | null {
   if (!title || !RELEVANCE_PATTERN.test(text)) return null;
   const publishedAt = item.isoDate ?? item.pubDate ?? new Date().toISOString();
 
+  const embeddedSource = (item as Parser.Item & { source?: { title?: string } }).source?.title?.trim();
+  const resolvedSource = embeddedSource ? embeddedSource : source;
+
   return {
     id: item.guid ?? item.link ?? source + '-' + publishedAt + '-' + title,
     title,
     url: item.link ?? '#',
-    source,
+    source: resolvedSource,
     publishedAt,
     ...classify(text.toLowerCase()),
     summary: snippet.slice(0, 220),
@@ -151,9 +167,10 @@ async function collectNewsUncached(realtime = false): Promise<News[]> {
 
   const deduped = new Map<string, News>();
   for (const item of batches.flat()) {
-    const existing = deduped.get(item.id);
+    const key = item.canonicalHeadline ?? item.id;
+    const existing = deduped.get(key);
     if (!existing || Date.parse(item.publishedAt) > Date.parse(existing.publishedAt)) {
-      deduped.set(item.id, item);
+      deduped.set(key, item);
     }
   }
 
