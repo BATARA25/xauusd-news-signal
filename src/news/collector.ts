@@ -76,7 +76,7 @@ async function collectBlsRelease(source: string, url: string, marker: string): P
     const html = await response.text();
     const text = decodeHtml(
       html
-        .replace(, ' ')
+        .replace(/<script[\s\S]*?<\/script>/gi, ' ')
         .replace(/<style[\s\S]*?<\/style>/gi, ' ')
         .replace(/<[^>]+>/g, ' '),
     ).replace(/\s+/g, ' ').trim();
