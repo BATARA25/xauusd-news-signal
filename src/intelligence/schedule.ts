@@ -30,6 +30,25 @@ export const ECONOMIC_SCHEDULE_2026: ScheduledEconomicEvent[] = [
   { id: 'US_FOMC', name: 'FOMC', releaseAt: '2026-09-16T14:00:00-04:00' },
   { id: 'US_FOMC', name: 'FOMC', releaseAt: '2026-10-28T14:00:00-04:00' },
   { id: 'US_FOMC', name: 'FOMC', releaseAt: '2026-12-09T14:00:00-05:00' },
+
+  { id: 'US_RATE', name: 'Fed Rate Decision', releaseAt: '2026-07-29T14:00:00-04:00' },
+  { id: 'US_RATE', name: 'Fed Rate Decision', releaseAt: '2026-09-16T14:00:00-04:00' },
+  { id: 'US_RATE', name: 'Fed Rate Decision', releaseAt: '2026-10-28T14:00:00-04:00' },
+  { id: 'US_RATE', name: 'Fed Rate Decision', releaseAt: '2026-12-09T14:00:00-05:00' },
+
+  { id: 'US_GDP', name: 'US GDP', releaseAt: '2026-07-30T08:30:00-04:00' },
+  { id: 'US_GDP', name: 'US GDP', releaseAt: '2026-08-26T08:30:00-04:00' },
+  { id: 'US_GDP', name: 'US GDP', releaseAt: '2026-09-30T08:30:00-04:00' },
+  { id: 'US_GDP', name: 'US GDP', releaseAt: '2026-10-29T08:30:00-04:00' },
+  { id: 'US_GDP', name: 'US GDP', releaseAt: '2026-11-25T08:30:00-05:00' },
+  { id: 'US_GDP', name: 'US GDP', releaseAt: '2026-12-23T08:30:00-05:00' },
+
+  { id: 'US_PCE', name: 'US PCE', releaseAt: '2026-07-30T08:30:00-04:00' },
+  { id: 'US_PCE', name: 'US PCE', releaseAt: '2026-08-28T08:30:00-04:00' },
+  { id: 'US_PCE', name: 'US PCE', releaseAt: '2026-09-30T08:30:00-04:00' },
+  { id: 'US_PCE', name: 'US PCE', releaseAt: '2026-10-29T08:30:00-04:00' },
+  { id: 'US_PCE', name: 'US PCE', releaseAt: '2026-11-25T08:30:00-05:00' },
+  { id: 'US_PCE', name: 'US PCE', releaseAt: '2026-12-23T08:30:00-05:00' },
 ];
 
 export function nearestScheduledEvent(id: string, referenceAt: string, windowDays = 45): ScheduledEconomicEvent | undefined {
