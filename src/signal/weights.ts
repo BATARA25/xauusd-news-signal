@@ -15,6 +15,7 @@ export const SIGNAL_CONFIG = {
   postReleaseSurpriseWeight: 0.4,
   postReleaseReactionWeight: 0.6,
   postReleaseWindowMinutes: 60,
+  preReleaseWindowMinutes: 24 * 60,
 } as const;
 
 export function newsWeight(item: News, now = Date.now()): number {
@@ -43,10 +44,10 @@ export function clampUnit(value: number): number {
 }
 
 /**
- * Converts an economic release into a directional surprise for gold.
- * Lower-than-expected inflation/rates are bullish for gold; higher-than-expected
- * readings are bearish. For payrolls/growth, stronger-than-expected data is
- * treated as bearish because it can reduce expectations for monetary easing.
+ * Converts a macro release surprise into a directional XAUUSD heuristic.
+ * Stronger US activity/inflation/rates are treated as negative for gold;
+ * weaker readings are treated as positive. This is a directional model,
+ * not a guarantee of price response.
  */
 export function releaseSurpriseDirection(actual?: number, forecast?: number, eventName = ''): number {
   if (!Number.isFinite(actual) || !Number.isFinite(forecast)) return 0;
