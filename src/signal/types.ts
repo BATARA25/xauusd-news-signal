@@ -14,11 +14,13 @@ export type MarketSignal = {
   symbol: 'XAUUSD';
   bias: SignalBias;
   confidence: number;
+  evidenceScore: number;
   score: number;
   impact: NewsImpact;
   phase: SignalPhase;
   eventId?: string;
   eventName?: string;
+  eventReleaseAt?: string;
   components: SignalComponents;
   updatedAt: string;
   drivers: string[];
