@@ -52,6 +52,17 @@ function money(value?: number) {
   return Number.isFinite(value) ? Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
 }
 
+function relativeTime(value?: string) {
+  if (!value) return 'just now';
+  const ms = Date.now() - new Date(value).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return 'just now';
+  const sec = Math.floor(ms / 1000);
+  if (sec < 60) return sec + 's ago';
+  const min = Math.floor(sec / 60);
+  if (min < 60) return min + 'm ago';
+  return Math.floor(min / 60) + 'h ago';
+}
+
 export default function Home() {
   const [signal, setSignal] = useState<Signal | null>(null);
   const [live, setLive] = useState(false);
@@ -61,6 +72,7 @@ export default function Home() {
   const [pushConnected, setPushConnected] = useState(false);
   const [pushTesting, setPushTesting] = useState(false);
   const [latency, setLatency] = useState<{ analysisMs: number; signalMs: number } | null>(null);
+  const [activeTopic, setActiveTopic] = useState('XAUUSD');
   const previousKey = useRef('WAIT:');
 
   const registerPush = async () => {
@@ -114,7 +126,7 @@ export default function Home() {
   };
 
   useEffect(() => {
-    document.title = 'NewsXLeak — Daily & Intraday XAUUSD';
+    document.title = 'NewsXLeak — XAUUSD Intelligence';
     if ('Notification' in window) setNotifications(Notification.permission);
     else setNotifications('unsupported');
     if ('serviceWorker' in navigator) void navigator.serviceWorker.register('/sw.js', { scope: '/' });
@@ -152,87 +164,142 @@ export default function Home() {
 
   const bias = signal?.dailyBias ?? 'WAIT';
   const setup = signal?.intradaySetup;
+  const topics = ['XAUUSD', 'BREAKING', 'HIGH IMPACT', 'USD', 'MACRO', 'CENTRAL BANKS'];
 
   return (
-    <div className="newsx-wrap">
+    <div className="newsx-app">
       {alert && (
         <div className={'signal-toast ' + alert.toLowerCase()} role="status" aria-live="assertive">
           <span className="toast-dot" /><strong>{alert} XAUUSD</strong>
+          <span className="toast-copy">New signal detected</span>
           <button onClick={() => setAlert(null)} aria-label="Close signal">×</button>
         </div>
       )}
 
-      <main>
-        <header className="site-header">
-          <div>
-            <div className="brand">NewsXLeak</div>
-            <p>Daily bias → intraday setup → macro catalyst alerts.</p>
+      <header className="topbar">
+        <div className="topbar-inner">
+          <button className="brand-mark" onClick={() => setActiveTopic('XAUUSD')} aria-label="NewsXLeak home">
+            <span className="brand-x">X</span><span>NewsXLeak</span>
+          </button>
+          <div className="topbar-center">
+            <span className={'status-pill ' + (live ? 'online' : '')}><i /> {live ? 'LIVE INTELLIGENCE' : 'CONNECTING'}</span>
           </div>
-          <div className="header-actions">
-            {installPrompt && <button className="install-button" onClick={() => void installApp()}>INSTALL</button>}
-            <button className="install-button" onClick={() => void enableNotifications()}>
-              {pushTesting ? 'TESTING…' : pushConnected ? 'PUSH ON' : notifications === 'granted' ? 'ENABLE PUSH' : 'ALERTS'}
+          <div className="topbar-actions">
+            {installPrompt && <button className="ghost-btn" onClick={() => void installApp()}>Install</button>}
+            <button className={'alert-btn ' + (pushConnected ? 'enabled' : '')} onClick={() => void enableNotifications()}>
+              <span>♢</span>{pushTesting ? 'Testing…' : pushConnected ? 'Alerts on' : 'Alerts'}
             </button>
-            <div className="live"><i className={live ? 'on' : ''} />{live ? 'LIVE' : 'CONNECTING'}</div>
           </div>
-        </header>
+        </div>
+      </header>
 
-        <section className="hero">
+      <div className="topic-strip">
+        <div className="topic-inner">
+          <button className="search-topic" aria-label="Search topics">⌕</button>
+          {topics.map((topic) => (
+            <button key={topic} onClick={() => setActiveTopic(topic)} className={'topic-chip ' + (activeTopic === topic ? 'active' : '')}>{topic}</button>
+          ))}
+        </div>
+      </div>
+
+      <main className="content">
+        <section className="welcome-row">
           <div>
-            <span className="label">XAUUSD DAILY SIGNAL</span>
-            <h1>Daily <em>Bias.</em></h1>
-            <p className="hero-copy">The daily layer reads the macro/news regime and produces one directional bias. Intraday execution is separated into a setup layer so the two decisions do not get mixed.</p>
+            <div className="eyebrow"><span className="live-dot" /> LIVE MARKET BRIEF</div>
+            <h1>What matters for <span>XAUUSD</span> right now.</h1>
+            <p>AI-filtered macro intelligence, short-form news context and an execution layer in one feed.</p>
           </div>
-          <div className="hero-signal">
-            <span className="label">TODAY</span>
-            <strong className={bias.toLowerCase()}>{bias}</strong>
-            <span>{signal ? signal.confidence + '% confidence' : 'Waiting for live data'}</span>
+          <div className="updated">
+            <span>UPDATED</span>
+            <strong>{relativeTime(signal?.updatedAt)}</strong>
           </div>
         </section>
 
-        <section className="quickbar">
-          <div><span>PRICE</span><strong>{money(signal?.price)}</strong></div>
-          <div><span>EVENT</span><strong>{signal?.eventName ?? '—'}</strong></div>
+        <section className="ticker">
+          <div><span>XAUUSD</span><strong>{money(signal?.price)}</strong></div>
+          <div><span>DAILY BIAS</span><strong className={bias.toLowerCase()}>{bias}</strong></div>
           <div><span>IMPACT</span><strong>{signal?.impact ?? '—'}</strong></div>
-          <div><span>PUSH</span><strong>{pushConnected ? 'READY' : 'OFF'}</strong></div>
-          <div><span>ANALYSIS</span><strong>{latency ? (latency.analysisMs / 1000).toFixed(2) + 's' : '—'}</strong></div>
+          <div><span>EVENT</span><strong>{signal?.eventName ?? 'Monitoring'}</strong></div>
+          <div><span>ENGINE</span><strong>{latency ? (latency.analysisMs / 1000).toFixed(2) + 's' : '—'}</strong></div>
         </section>
 
-        <section className="signal-focus">
-          <span className="label">DAILY BIAS</span>
-          <div className={'focus-bias ' + bias.toLowerCase()}>{bias}</div>
-          <p>{signal?.phase === 'PRE_RELEASE' ? 'Macro event window: pre-release context is active.' : signal?.phase === 'POST_RELEASE' ? 'Macro event window: post-release reaction is active.' : 'No active major release window.'}</p>
+        <section className="section-title">
+          <div><span>TOP STORIES</span><strong>{activeTopic}</strong></div>
+          <span className="feed-note">AI summary · live context</span>
         </section>
 
-        <section className="setup-panel">
-          <div className="setup-head">
-            <div><span className="label">INTRADAY SETUP</span><h2>{setup?.status === 'ACTIVE' ? setup.side + ' execution framework' : 'WAIT — no forced setup'}</h2></div>
-            <span className={'setup-status ' + (setup?.status === 'ACTIVE' ? 'active' : 'wait')}>{setup?.status ?? 'WAIT'}</span>
+        <article className="master-card">
+          <div className="master-top">
+            <div className="source-line"><span className="source-icon">N</span><span>NewsXLeak Intelligence</span><span>•</span><span>{relativeTime(signal?.updatedAt)}</span></div>
+            <span className={'impact-tag ' + (signal?.impact ?? 'LOW').toLowerCase()}>{signal?.impact ?? 'LOW'} IMPACT</span>
           </div>
-
-          <div className="setup-grid">
-            <div><span>ENTRY ZONE</span><strong>{money(setup?.entryLow)} — {money(setup?.entryHigh)}</strong></div>
-            <div><span>STOP LOSS</span><strong>{money(setup?.stopLoss)}</strong></div>
-            <div><span>TP1</span><strong>{money(setup?.takeProfit1)}</strong></div>
-            <div><span>TP2</span><strong>{money(setup?.takeProfit2)}</strong></div>
+          <div className="master-grid">
+            <div className="master-copy">
+              <span className="card-kicker">MASTER SIGNAL · XAUUSD</span>
+              <h2>{signal?.eventName ? signal.eventName : 'Macro regime is being monitored'}</h2>
+              <p>{signal?.drivers?.[0] ?? 'The engine is waiting for structured macro/news evidence before creating a directional setup.'}</p>
+              <div className="story-actions">
+                <button onClick={() => setActiveTopic('XAUUSD')}>View signal</button>
+                <button className="subtle" onClick={() => void enableNotifications()}>Enable alerts</button>
+              </div>
+            </div>
+            <div className={'master-bias ' + bias.toLowerCase()}>
+              <span>DAILY BIAS</span>
+              <strong>{bias}</strong>
+              <small>{signal ? signal.confidence + '% confidence' : 'Awaiting data'}</small>
+            </div>
           </div>
+        </article>
 
-          <p className="setup-trigger">{setup?.trigger ?? 'Waiting for signal.'}</p>
-          <p className="setup-note">{setup?.note ?? 'Intraday setup will appear after daily direction and price are available.'}</p>
+        <section className="feed-grid">
+          <article className="news-card">
+            <div className="card-head"><span className="card-kicker">AI SUMMARY</span><span>{signal?.phase?.replace('_', ' ') ?? 'CONTEXT'}</span></div>
+            <h3>Why the market is reacting this way</h3>
+            <p>{signal?.drivers?.slice(0, 2).join(' ') || 'News, source quality, novelty, impact and release context are combined before the signal layer responds.'}</p>
+            <div className="card-foot"><span>Evidence {signal?.evidenceScore ?? '—'}</span><span>{signal?.highImpactCount ?? 0} high-impact / {signal?.sampleSize ?? 0} sampled</span></div>
+          </article>
+
+          <article className="news-card setup-card">
+            <div className="card-head"><span className="card-kicker">INTRADAY SETUP</span><span className={'mini-status ' + (setup?.status === 'ACTIVE' ? 'active' : '')}>{setup?.status ?? 'WAIT'}</span></div>
+            <h3>{setup?.status === 'ACTIVE' ? setup.side + ' execution framework' : 'WAIT — no forced setup'}</h3>
+            <div className="levels">
+              <div><span>ENTRY</span><strong>{money(setup?.entryLow)} — {money(setup?.entryHigh)}</strong></div>
+              <div><span>SL</span><strong>{money(setup?.stopLoss)}</strong></div>
+              <div><span>TP1</span><strong>{money(setup?.takeProfit1)}</strong></div>
+              <div><span>TP2</span><strong>{money(setup?.takeProfit2)}</strong></div>
+            </div>
+            <p className="micro-note">{setup?.trigger ?? 'Waiting for a valid execution trigger.'}</p>
+          </article>
         </section>
 
-        <section className="method">
-          <div><span className="label">MACRO ENGINE</span><h2>{signal?.eventName ?? 'Monitoring the macro regime'}</h2></div>
-          <p>Daily bias uses news direction, source quality, novelty, impact, event context and release surprise when structured actual/forecast data exists. Intraday levels are dynamic volatility buffers around the live XAUUSD price; they are not claimed as technical support/resistance.</p>
+        <section className="feed-section">
+          <div className="section-title"><div><span>MARKET CONTEXT</span><strong>Latest intelligence</strong></div></div>
+          {(signal?.drivers?.length ? signal.drivers : ['No fresh driver has been classified yet.']).map((driver, index) => (
+            <article className="story-row" key={index}>
+              <div className="story-index">{String(index + 1).padStart(2, '0')}</div>
+              <div className="story-body">
+                <div className="story-meta"><span>{index === 0 ? 'PRIMARY DRIVER' : 'SUPPORTING EVIDENCE'}</span><span>·</span><span>XAUUSD</span></div>
+                <h3>{driver}</h3>
+                <p>AI-classified market context used by the signal engine.</p>
+              </div>
+              <div className="story-arrow">›</div>
+            </article>
+          ))}
         </section>
 
-        <section className="method">
-          <div><span className="label">SYSTEM</span><h2>Two layers. One workflow.</h2></div>
-          <p><b>Daily:</b> establish directional bias. <b>Intraday:</b> wait for price to enter the setup zone while the bias remains valid. <b>News:</b> recalculate immediately around high-impact releases. <b>WAIT:</b> no forced trade setup.</p>
+        <section className="method-strip">
+          <div><span>HOW NEWSXLEAK WORKS</span><strong>News → Validation → Impact → Cross-asset → Signal</strong></div>
+          <p>Daily direction stays separate from intraday execution. High-impact releases trigger recalculation; when evidence is insufficient, the system remains WAIT.</p>
         </section>
-
-        <footer><span>NewsXLeak</span><span>Decision support, not a profit guarantee.</span></footer>
       </main>
+
+      <nav className="bottom-nav">
+        <button className="selected"><span>⌂</span>Home</button>
+        <button onClick={() => setActiveTopic('BREAKING')}><span>▤</span>News</button>
+        <button onClick={() => setActiveTopic('XAUUSD')}><span>◈</span>Signal</button>
+        <button onClick={() => void enableNotifications()}><span>♢</span>Alerts</button>
+        <button><span>⋯</span>More</button>
+      </nav>
     </div>
   );
 }
