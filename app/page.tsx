@@ -4,25 +4,26 @@
 import { useEffect, useRef, useState } from 'react';
 
 type Signal = {
-  symbol: 'XAUUSD'; bias: 'BUY' | 'SELL' | 'WAIT'; confidence: number;
-  evidenceScore: number; score: number; impact: 'HIGH' | 'MEDIUM' | 'LOW';
-  phase?: 'PRE_RELEASE' | 'POST_RELEASE' | 'CONTEXT'; eventName?: string; eventReleaseAt?: string;
-  components?: { context: number; confirmation: number; surprise: number; reaction: number };
-  updatedAt: string; drivers: string[]; highImpactCount: number; sampleSize: number;
+  symbol: 'XAUUSD';
+  bias: 'BUY' | 'SELL' | 'WAIT';
+  confidence: number;
+  evidenceScore: number;
+  impact: 'HIGH' | 'MEDIUM' | 'LOW';
+  phase?: 'PRE_RELEASE' | 'POST_RELEASE' | 'CONTEXT';
+  eventName?: string;
+  eventReleaseAt?: string;
+  updatedAt: string;
+  drivers: string[];
+  highImpactCount: number;
+  sampleSize: number;
 };
-type Price = { price: number; updatedAt: string; source: string; stale?: boolean };
-type Audit = {
-  id: string; timestamp: string; bias: 'BUY' | 'SELL'; eventName?: string; phase?: string;
-  confidence: number; evidenceScore: number; entry: number;
-  prices: Record<'5m' | '15m' | '30m' | '60m', number | null>;
-};
+
 type InstallPromptEvent = Event & {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
 };
 
-const AUDIT_KEY = 'newsxleak-live-audit-v2';
-const PUSH_WORKER_URL = 'https://newsxleak-push-production.up.railway.app';
+const PUSH_WORKER_URL = 'https://newsxleak-push-worker-production.up.railway.app';
 const VAPID_PUBLIC_KEY = 'BMIMkJMz2bK8vLx0pXimADNcTfsrwdsPzDX1zzl70Hgo67s7Sef4tNoo4AChkYle90IYil4DuzhjdcpiL_RSUMI';
 
 function decodeKey(value: string) {
@@ -36,29 +37,10 @@ export default function Home() {
   const [live, setLive] = useState(false);
   const [alert, setAlert] = useState<'BUY' | 'SELL' | null>(null);
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
-  const [price, setPrice] = useState<Price | null>(null);
   const [notifications, setNotifications] = useState<NotificationPermission | 'unsupported'>('default');
   const [pushConnected, setPushConnected] = useState(false);
-  const [audits, setAudits] = useState<Audit[]>([]);
+  const [latency, setLatency] = useState<{ analysisMs: number; signalMs: number } | null>(null);
   const previousKey = useRef('WAIT:');
-  const priceRef = useRef<Price | null>(null);
-
-  const saveAudits = (next: Audit[]) => {
-    setAudits(next);
-    localStorage.setItem(AUDIT_KEY, JSON.stringify(next.slice(0, 100)));
-  };
-
-  const refreshPrice = async () => {
-    try {
-      const response = await fetch('/api/price', { cache: 'no-store' });
-      if (!response.ok) return;
-      const data = await response.json();
-      if (data.ok && Number.isFinite(data.price)) {
-        priceRef.current = data;
-        setPrice(data);
-      }
-    } catch {}
-  };
 
   const registerPush = async () => {
     if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return false;
@@ -85,8 +67,7 @@ export default function Home() {
 
   const enableNotifications = async () => {
     try {
-      const ok = await registerPush();
-      if (ok) {
+      if (await registerPush()) {
         const registration = await navigator.serviceWorker.ready;
         registration.active?.postMessage({ type: 'TEST_NOTIFICATION' });
       }
@@ -97,39 +78,26 @@ export default function Home() {
 
   const refresh = async () => {
     try {
-      const [newsResponse, signalResponse] = await Promise.all([
-        fetch('/api/news', { cache: 'no-store' }),
-        fetch('/api/signal', { cache: 'no-store' })
-      ]);
-      if (newsResponse.ok) setNews((await newsResponse.json()).news ?? []);
-      if (!signalResponse.ok) { setLive(false); return; }
+      const response = await fetch('/api/signal?realtime=1', { cache: 'no-store' });
+      if (!response.ok) {
+        setLive(false);
+        return;
+      }
 
-      const next = (await signalResponse.json()).signal as Signal | undefined;
+      const payload = await response.json();
+      const next = payload.signal as Signal | undefined;
       if (!next) return;
+
       setSignal(next);
       setLive(true);
+
+      if (Number.isFinite(payload.analysisLatencyMs) && Number.isFinite(payload.signalLatencyMs)) {
+        setLatency({ analysisMs: payload.analysisLatencyMs, signalMs: payload.signalLatencyMs });
+      }
 
       const key = next.bias + ':' + (next.eventReleaseAt ?? next.eventName ?? 'CONTEXT');
       if ((next.bias === 'BUY' || next.bias === 'SELL') && key !== previousKey.current) {
         setAlert(next.bias);
-        const entry = priceRef.current?.price;
-        if (entry && Number.isFinite(entry)) {
-          const existing = JSON.parse(localStorage.getItem(AUDIT_KEY) ?? '[]') as Audit[];
-          const existingTrade = existing.find((item) => item.id === key);
-          if (!existingTrade) {
-            saveAudits([{
-              id: key,
-              timestamp: new Date().toISOString(),
-              bias: next.bias,
-              eventName: next.eventName,
-              phase: next.phase,
-              confidence: next.confidence,
-              evidenceScore: next.evidenceScore,
-              entry,
-              prices: { '5m': null, '15m': null, '30m': null, '60m': null }
-            }, ...existing]);
-          }
-        }
       }
       previousKey.current = key;
     } catch {
@@ -138,9 +106,7 @@ export default function Home() {
   };
 
   useEffect(() => {
-    document.title = 'NewsXLeak — XAUUSD News Intelligence';
-    const saved = localStorage.getItem(AUDIT_KEY);
-    if (saved) { try { setAudits(JSON.parse(saved)); } catch {} }
+    document.title = 'NewsXLeak — XAUUSD Signal Engine';
     if ('Notification' in window) setNotifications(Notification.permission);
     else setNotifications('unsupported');
 
@@ -154,12 +120,15 @@ export default function Home() {
     };
     window.addEventListener('beforeinstallprompt', onInstallPrompt);
 
-    void refreshPrice();
     void refresh();
-    const timer = window.setInterval(() => {
-      void refresh();
-      void refreshPrice();
-    }, 15000);
+
+    const timer = window.setInterval(() => void refresh(), 3000);
+
+    const syncPush = async () => {
+      if (Notification.permission !== 'granted') return;
+      try { await registerPush(); } catch {}
+    };
+    void syncPush();
 
     return () => {
       window.removeEventListener('beforeinstallprompt', onInstallPrompt);
@@ -172,40 +141,6 @@ export default function Home() {
     const timer = window.setTimeout(() => setAlert(null), 7000);
     return () => window.clearTimeout(timer);
   }, [alert]);
-
-  useEffect(() => {
-    if (!price || audits.length === 0) return;
-    const now = Date.now();
-    let changed = false;
-    const next = audits.map((item) => {
-      const elapsed = now - Date.parse(item.timestamp);
-      const prices = { ...item.prices };
-      for (const [label, minutes] of [['5m', 5], ['15m', 15], ['30m', 30], ['60m', 60]] as const) {
-        if (elapsed >= minutes * 60000 && prices[label] === null) {
-          prices[label] = price.price;
-          changed = true;
-        }
-      }
-      return { ...item, prices };
-    });
-    if (changed) saveAudits(next);
-  }, [price, audits]);
-
-  const exportAudit = () => {
-    const header = 'timestamp,bias,event,phase,confidence,evidence,entry,5m,15m,30m,60m\n';
-    const rows = audits.map((a) => [
-      a.timestamp, a.bias, a.eventName ?? '', a.phase ?? '', a.confidence,
-      a.evidenceScore, a.entry, a.prices['5m'] ?? '', a.prices['15m'] ?? '',
-      a.prices['30m'] ?? '', a.prices['60m'] ?? ''
-    ].map((v) => '"' + String(v).replace(/"/g, '""') + '"').join(',')).join('\n');
-    const blob = new Blob([header + rows], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = 'newsxleak-live-audit.csv';
-    anchor.click();
-    URL.revokeObjectURL(url);
-  };
 
   const installApp = async () => {
     if (!installPrompt) return;
@@ -221,7 +156,7 @@ export default function Home() {
       {alert && (
         <div className={'signal-toast ' + alert.toLowerCase()} role="status" aria-live="assertive">
           <span className="toast-dot" />
-          <strong>{alert}</strong>
+          <strong>{alert} XAUUSD</strong>
           <button onClick={() => setAlert(null)} aria-label="Close signal">×</button>
         </div>
       )}
@@ -230,12 +165,12 @@ export default function Home() {
         <header className="site-header">
           <div>
             <div className="brand">NewsXLeak</div>
-            <p>Real-time economic news intelligence for XAUUSD.</p>
+            <p>News → analysis → signal → Android notification.</p>
           </div>
           <div className="header-actions">
-            {installPrompt && <button className="install-button" onClick={() => void installApp()}>INSTALL APP</button>}
+            {installPrompt && <button className="install-button" onClick={() => void installApp()}>INSTALL</button>}
             <button className="install-button" onClick={() => void enableNotifications()}>
-              {pushConnected ? 'PUSH ON' : notifications === 'granted' ? 'ENABLE PUSH' : 'ENABLE ALERTS'}
+              {pushConnected ? 'PUSH ON' : notifications === 'granted' ? 'ENABLE PUSH' : 'ALERTS'}
             </button>
             <div className="live"><i className={live ? 'on' : ''} />{live ? 'LIVE' : 'CONNECTING'}</div>
           </div>
@@ -243,9 +178,9 @@ export default function Home() {
 
         <section className="hero">
           <div>
-            <span className="label">XAUUSD / NEWS SIGNAL</span>
-            <h1>News that matters.<br /><em>Signal when it matters.</em></h1>
-            <p className="hero-copy">A focused news terminal for high-impact economic releases. Built for fast reading, not information overload.</p>
+            <span className="label">XAUUSD NEWS SIGNAL ENGINE</span>
+            <h1>News → <em>Signal.</em></h1>
+            <p className="hero-copy">Built for one job: detect high-impact macro news, analyze it fast, and deliver a directional signal. No charts. No timeframes. No technical indicators.</p>
           </div>
           <div className="hero-signal">
             <span className="label">CURRENT SIGNAL</span>
@@ -255,71 +190,37 @@ export default function Home() {
         </section>
 
         <section className="quickbar">
-          <div><span>MARKET</span><strong>XAUUSD</strong></div>
-          <div><span>PRICE</span><strong>{price ? price.price.toFixed(2) : '—'}</strong></div>
+          <div><span>EVENT</span><strong>{signal?.eventName ?? '—'}</strong></div>
           <div><span>IMPACT</span><strong>{signal?.impact ?? '—'}</strong></div>
           <div><span>PHASE</span><strong>{signal?.phase ?? '—'}</strong></div>
           <div><span>PUSH</span><strong>{pushConnected ? 'READY' : 'OFF'}</strong></div>
-          <div><span>EVIDENCE</span><strong>{signal ? signal.evidenceScore + '%' : '—'}</strong></div>
+          <div><span>ANALYSIS</span><strong>{latency ? (latency.analysisMs / 1000).toFixed(2) + 's' : '—'}</strong></div>
+          <div><span>SIGNAL</span><strong>{latency ? (latency.signalMs / 1000).toFixed(2) + 's' : '—'}</strong></div>
         </section>
 
         <section className="method">
-          <div><span className="label">ENGINE STATE</span><h2>{signal?.eventName ?? 'Context monitoring'}</h2></div>
+          <div>
+            <span className="label">DECISION ENGINE</span>
+            <h2>{signal?.eventName ?? 'Monitoring high-impact macro news'}</h2>
+          </div>
           <p>
             {signal?.phase === 'PRE_RELEASE'
-              ? '80:20 pre-release weighting: context 80%, high-impact confirmation 20%.'
+              ? 'Pre-release: 80% macro context + 20% high-impact confirmation.'
               : signal?.phase === 'POST_RELEASE'
-                ? '40:60 post-release weighting: surprise 40%, observed reaction 60%.'
-                : 'Context mode: no active release window. The engine avoids forcing a directional macro call.'}
+                ? 'Post-release: 40% release surprise + 60% observed news reaction.'
+                : 'Context mode: no active release window. The engine avoids forcing a directional call.'}
           </p>
         </section>
 
-        <section className="section-head">
-          <div><span className="label">LIVE FEED</span><h2>Latest market news</h2></div>
-          <span className="feed-status">{news.length} monitored stories</span>
-        </section>
-
-        <section className="news-list">
-          {news.length === 0 ? <div className="empty">Waiting for live market news…</div> : news.map((item) => (
-            <article className="news-row" key={item.id}>
-              <div className="news-meta">
-                <span className={'impact ' + item.impact.toLowerCase()}>{item.impact}</span>
-                <span>{item.source}</span>
-                <span>{timeWIB(item.publishedAt)}</span>
-              </div>
-              <div className="news-main"><h3>{item.title}</h3><p>{item.summary}</p></div>
-              <div className={'direction ' + item.direction.toLowerCase()}>{item.direction}</div>
-            </article>
-          ))}
-        </section>
-
-        <section className="method audit-panel">
-          <div><span className="label">LIVE AUDIT</span><h2>{audits.length} directional alerts recorded</h2></div>
-          <div>
-            <p>Observation log for entry and 5/15/30/60-minute reaction points. It is not a fabricated WIN/LOSS result.</p>
-            <div className="audit-actions">
-              <button className="install-button" onClick={exportAudit}>EXPORT CSV</button>
-              {price && <span className="feed-status">Spot {price.price.toFixed(2)} · {timeWIB(price.updatedAt)}</span>}
-            </div>
-          </div>
+        <section className="signal-focus">
+          <span className="label">OUTPUT</span>
+          <div className={'focus-bias ' + bias.toLowerCase()}>{bias}</div>
+          <p>WAIT stays silent. BUY/SELL is the only directional output sent to the Android push channel.</p>
         </section>
 
         <section className="method">
-          <div><span className="label">SIGNAL AUDIT</span><h2>Evidence & reaction</h2></div>
-          <p>Sample {signal?.sampleSize ?? 0} · High impact {signal?.highImpactCount ?? 0} · Context {percent(signal?.components?.context)} · Surprise {percent(signal?.components?.surprise)} · Reaction {percent(signal?.components?.reaction)}</p>
-        </section>
-
-        <section className="news-list audit-list">
-          {audits.length === 0 ? <div className="empty">No BUY/SELL event captured yet.</div> : audits.slice(0, 8).map((a) => (
-            <article className="news-row" key={a.id}>
-              <div className="news-meta"><span>{timeWIB(a.timestamp)}</span><span>{a.phase ?? '—'}</span></div>
-              <div className="news-main">
-                <h3>{a.bias} · {a.eventName ?? 'Signal'}</h3>
-                <p>Entry {a.entry.toFixed(2)} · +5m {a.prices['5m']?.toFixed(2) ?? 'pending'} · +15m {a.prices['15m']?.toFixed(2) ?? 'pending'} · +30m {a.prices['30m']?.toFixed(2) ?? 'pending'} · +60m {a.prices['60m']?.toFixed(2) ?? 'pending'}</p>
-              </div>
-              <div className={'direction ' + a.bias.toLowerCase()}>{a.confidence}%</div>
-            </article>
-          ))}
+          <div><span className="label">SYSTEM</span><h2>Speed is the product.</h2></div>
+          <p>NewsXLeak is optimized around the path that matters: news received → analysis → signal → push. It does not execute trades and does not claim guaranteed accuracy.</p>
         </section>
 
         <footer><span>NewsXLeak</span><span>Signal intelligence, not a profit guarantee.</span></footer>
