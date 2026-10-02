@@ -1,0 +1,28 @@
+{
+  "name": "NewsXLeak — XAUUSD News Intelligence",
+  "short_name": "NewsXLeak",
+  "description": "Real-time economic news intelligence for XAUUSD.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#07090c",
+  "theme_color": "#07090c",
+  "categories": ["finance", "business", "news"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "XAUUSD Signal",
+      "short_name": "Signal",
+      "url": "/",
+      "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    }
+  ]
+}
