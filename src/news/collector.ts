@@ -76,10 +76,10 @@ async function collectBlsRelease(source: string, url: string, marker: string): P
     const html = await response.text();
     const text = decodeHtml(
       html
-        .replace(/<script[\\s\\S]*?<\\/script>/gi, ' ')
-        .replace(/<style[\\s\\S]*?<\\/style>/gi, ' ')
+        .replace(, ' ')
+        .replace(/<style[\s\S]*?<\/style>/gi, ' ')
         .replace(/<[^>]+>/g, ' '),
-    ).replace(/\\s+/g, ' ').trim();
+    ).replace(/\s+/g, ' ').trim();
 
     const markerIndex = text.toLowerCase().indexOf(marker.toLowerCase());
     const excerpt = markerIndex >= 0 ? text.slice(markerIndex, markerIndex + 900) : text.slice(0, 900);
