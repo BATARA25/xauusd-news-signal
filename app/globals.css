@@ -24,7 +24,7 @@ button{font:inherit}
 .hero-signal strong{display:block;font-size:44px;line-height:1;margin:10px 0}
 .hero-signal span:last-child{color:#7f8995;font-size:12px}
 .buy{color:#4ee58d}.sell{color:#ff6978}.wait{color:#b8c0c9}
-.quickbar{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid #20262e;border-bottom:1px solid #20262e}
+ .quickbar{display:grid;grid-template-columns:repeat(5,1fr);border-top:1px solid #20262e;border-bottom:1px solid #20262e}
 .quickbar div{padding:16px 18px;border-right:1px solid #20262e}
 .quickbar div:last-child{border-right:0}
 .quickbar span{display:block;color:#707a87;font-size:9px;letter-spacing:.15em;margin-bottom:7px}
