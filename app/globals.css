@@ -8,6 +8,9 @@ button{font:inherit}
 .site-header{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;border-bottom:1px solid #20262e;padding-bottom:26px}
 .brand{font-size:24px;font-weight:760;letter-spacing:-.03em}
 .site-header p{margin:5px 0 0;color:#8c95a1;font-size:13px}
+.header-actions{display:flex;align-items:center;gap:14px}
+.install-button{border:1px solid #39424d;border-radius:8px;background:#11161b;color:#e8edf2;padding:8px 11px;font-size:9px;font-weight:750;letter-spacing:.12em;cursor:pointer}
+.install-button:hover{border-color:#626e7b;background:#151b21}
 .live{display:flex;align-items:center;gap:8px;color:#89929e;font-size:10px;letter-spacing:.14em}
 .live i{width:7px;height:7px;border-radius:50%;background:#69727d}
 .live i.on{background:#4ee58d;box-shadow:0 0 12px rgba(78,229,141,.55)}
@@ -49,6 +52,9 @@ footer{display:flex;justify-content:space-between;padding-top:25px;color:#626c78
 .signal-toast.buy .toast-dot{background:#4ee58d}.signal-toast.sell .toast-dot{background:#ff6978}
 @media(max-width:720px){
  .newsx-wrap main{padding:16px 15px 45px}
+ .site-header{align-items:center}
+ .header-actions{gap:9px}
+ .install-button{padding:7px 9px}
  .hero{grid-template-columns:1fr;padding:42px 0 30px}
  .hero-signal{border-left:0;border-top:1px solid #252b32;padding:18px 0 0}
  .quickbar{grid-template-columns:repeat(2,1fr)}
