@@ -1,6 +1,14 @@
 import type { NewsImpact } from '../news/types';
 
 export type SignalBias = 'BUY' | 'SELL' | 'WAIT';
+export type SignalPhase = 'PRE_RELEASE' | 'POST_RELEASE' | 'CONTEXT';
+
+export type SignalComponents = {
+  context: number;
+  confirmation: number;
+  surprise: number;
+  reaction: number;
+};
 
 export type MarketSignal = {
   symbol: 'XAUUSD';
@@ -8,6 +16,10 @@ export type MarketSignal = {
   confidence: number;
   score: number;
   impact: NewsImpact;
+  phase: SignalPhase;
+  eventId?: string;
+  eventName?: string;
+  components: SignalComponents;
   updatedAt: string;
   drivers: string[];
   highImpactCount: number;
