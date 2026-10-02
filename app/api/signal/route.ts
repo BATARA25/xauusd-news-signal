@@ -11,7 +11,24 @@ export async function GET(request: Request) {
     const realtime = new URL(request.url).searchParams.get('realtime') === '1';
     const news = await collectNews({ realtime });
     const analyzedAt = new Date().toISOString();
-    const signal = buildSignal(news);
+
+    let market: { price?: number; priceUpdatedAt?: string } = {};
+    try {
+      const priceResponse = await fetch('https://xaus.com/api/v1/spot?compact=1', {
+        cache: 'no-store',
+        signal: AbortSignal.timeout(4000),
+        headers: { Accept: 'application/json' },
+      });
+      if (priceResponse.ok) {
+        const data = await priceResponse.json();
+        const price = Number(data?.spot_usd_oz ?? data?.xau?.price);
+        if (Number.isFinite(price)) {
+          market = { price, priceUpdatedAt: data?.updated_at ?? new Date().toISOString() };
+        }
+      }
+    } catch {}
+
+    const signal = buildSignal(news, Date.now(), market);
     const signalAt = new Date().toISOString();
 
     return NextResponse.json({
