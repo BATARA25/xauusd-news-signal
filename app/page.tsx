@@ -72,9 +72,10 @@ export default function Home() {
   const [notifications, setNotifications] = useState<NotificationPermission | 'unsupported'>('default');
   const [audits, setAudits] = useState<Audit[]>([]);
   const previousKey = useRef('WAIT:');
+  const priceRef = useRef<Price | null>(null);
   const AUDIT_KEY = 'newsxleak-live-audit-v1';
   const saveAudits = (next: Audit[]) => { setAudits(next); localStorage.setItem(AUDIT_KEY, JSON.stringify(next.slice(0, 100))); };
-  const refreshPrice = async () => { try { const r = await fetch('/api/price', { cache: 'no-store' }); if (!r.ok) return; const d = await r.json(); if (d.ok && Number.isFinite(d.price)) setPrice(d); } catch {} };
+  const refreshPrice = async () => { try { const r = await fetch('/api/price', { cache: 'no-store' }); if (!r.ok) return; const d = await r.json(); if (d.ok && Number.isFinite(d.price)) { priceRef.current = d; setPrice(d); } } catch {} };
   const notifySignal = async (bias: 'BUY' | 'SELL', next: Signal) => { if (!('Notification' in window) || Notification.permission !== 'granted') return; const reg = await navigator.serviceWorker.ready; reg.active?.postMessage({ type: 'SIGNAL_ALERT', bias, eventName: next.eventName ?? 'XAUUSD signal', confidence: next.confidence, phase: next.phase ?? 'CONTEXT' }); };
   const [price, setPrice] = useState<Price | null>(null);
   const [notifications, setNotifications] = useState<NotificationPermission | 'unsupported'>('default');
