@@ -6,13 +6,21 @@ import type { MarketSignal, SignalComponents, SignalPhase } from './types';
 function aggregate(news: News[], now: number, predicate?: (item: News) => boolean): number {
   let numerator = 0;
   let denominator = 0;
+
   for (const item of news) {
     if (predicate && !predicate(item)) continue;
     const direction = item.direction === 'BULLISH' ? 1 : item.direction === 'BEARISH' ? -1 : 0;
+    if (direction === 0) continue;
+
+    // item.score is a strength score around 50, not a probability.
+    // Using score/100 would create a bullish bias because 68 is larger than
+    // the corresponding bearish value 32. Convert it to symmetric strength.
+    const strength = Math.abs(item.score - 50) / 50;
     const weight = newsWeight(item, now);
-    numerator += direction * (item.score / 100) * weight;
+    numerator += direction * strength * weight;
     denominator += weight;
   }
+
   return denominator > 0 ? clampUnit(numerator / denominator) : 0;
 }
 
@@ -63,12 +71,52 @@ function directionalAgreement(news: News[]): number {
 }
 
 function evidenceScore(news: News[], event: News['event'], phase: SignalPhase): number {
+  const directional = news.filter((item) => item.direction !== 'NEUTRAL');
   const sampleEvidence = Math.min(1, news.length / 10);
   const agreement = directionalAgreement(news);
-  const sourceQuality = news.length === 0 ? 0 : news.reduce((sum, item) => sum + (item.sourceQuality ?? 0.5), 0) / news.length;
+  const sourceQuality = news.length === 0
+    ? 0
+    : news.reduce((sum, item) => sum + (item.sourceQuality ?? 0.5), 0) / news.length;
+  const uniqueSources = new Set(news.map((item) => item.source.toLowerCase().trim()).filter(Boolean)).size;
+  const sourceDiversity = Math.min(1, uniqueSources / 3);
   const eventEvidence = event ? 1 : 0.25;
-  const structuredReleaseEvidence = phase === 'POST_RELEASE' && event?.actual !== undefined && event?.forecast !== undefined ? 1 : 0.4;
-  return Math.round((sampleEvidence * 0.30 + agreement * 0.25 + sourceQuality * 0.20 + eventEvidence * 0.10 + structuredReleaseEvidence * 0.15) * 100);
+  const structuredReleaseEvidence = phase === 'POST_RELEASE' && event?.actual !== undefined && event?.forecast !== undefined ? 1 : 0.35;
+
+  return Math.round(
+    (sampleEvidence * 0.20
+      + agreement * 0.25
+      + sourceQuality * 0.15
+      + sourceDiversity * 0.15
+      + eventEvidence * 0.10
+      + structuredReleaseEvidence * 0.15) * 100,
+  );
+}
+
+function directionalGate(news: News[], normalized: number, event: News['event'], phase: SignalPhase): 'BUY' | 'SELL' | 'WAIT' {
+  if (Math.abs(normalized) < SIGNAL_CONFIG.waitThreshold) return 'WAIT';
+
+  const directional = news.filter((item) => item.direction !== 'NEUTRAL');
+  const bullish = directional.filter((item) => item.direction === 'BULLISH');
+  const bearish = directional.filter((item) => item.direction === 'BEARISH');
+  const dominant = normalized > 0 ? bullish : bearish;
+  const dominantSources = new Set(dominant.map((item) => item.source.toLowerCase().trim())).size;
+  const agreement = directional.length ? Math.max(bullish.length, bearish.length) / directional.length : 0;
+
+  // A structured post-release actual-vs-forecast surprise is allowed to act
+  // with one official source. Otherwise require independent source agreement.
+  const structuredRelease = phase === 'POST_RELEASE'
+    && event?.actual !== undefined
+    && event?.forecast !== undefined;
+
+  if (!structuredRelease && (
+    dominant.length < SIGNAL_CONFIG.minimumDirectionalItems
+    || dominantSources < SIGNAL_CONFIG.minimumDirectionalSources
+    || agreement < SIGNAL_CONFIG.conflictAgreementThreshold
+  )) {
+    return 'WAIT';
+  }
+
+  return normalized > 0 ? 'BUY' : 'SELL';
 }
 
 export function buildSignal(news: News[], now = Date.now(), market?: { price?: number; priceUpdatedAt?: string }): MarketSignal {
@@ -77,6 +125,7 @@ export function buildSignal(news: News[], now = Date.now(), market?: { price?: n
       const published = Date.parse(item.publishedAt);
       return !Number.isFinite(published) || now - published <= SIGNAL_CONFIG.maxAgeHours * 3600000;
     })
+    .sort((a, b) => newsWeight(b, now) - newsWeight(a, now))
     .slice(0, SIGNAL_CONFIG.sampleSize);
 
   const event = findEvent(recent, now);
@@ -92,20 +141,31 @@ export function buildSignal(news: News[], now = Date.now(), market?: { price?: n
   const surprise = releaseSurpriseDirection(event?.actual, event?.forecast, event?.name);
   const components: SignalComponents = { context, confirmation, surprise, reaction };
   const normalized = componentScore(components, phase);
-  const score = Math.round(50 + normalized * 50);
   const evidence = evidenceScore(recent, event, phase);
-  const rawConfidence = 50 + Math.abs(normalized) * 45;
+  const bias = directionalGate(recent, normalized, event, phase);
+
+  // Confidence is evidence-weighted, not a claimed win probability.
+  const rawConfidence = 50 + Math.abs(normalized) * 42;
+  const evidenceAdjusted = 25 + (rawConfidence - 25) * (evidence / 100);
   const confidence = Math.min(
     SIGNAL_CONFIG.maxConfidence,
-    Math.max(SIGNAL_CONFIG.minConfidence, Math.round(20 + (rawConfidence - 20) * (evidence / 100))),
+    Math.max(SIGNAL_CONFIG.minConfidence, Math.round(evidenceAdjusted)),
   );
-  const bias = Math.abs(normalized) < SIGNAL_CONFIG.waitThreshold ? 'WAIT' : normalized > 0 ? 'BUY' : 'SELL';
 
+  const score = Math.round(50 + normalized * 50);
   const highImpactCount = recent.filter((item) => item.impact === 'HIGH').length;
   const impact = highImpactCount > 0 ? 'HIGH' : recent.some((item) => item.impact === 'MEDIUM') ? 'MEDIUM' : 'LOW';
+
   const drivers: string[] = [];
   for (const item of recent) {
-    if (item.direction !== 'NEUTRAL' && item.impact === 'HIGH' && drivers.length < 3) drivers.push(item.title);
+    if (item.direction !== 'NEUTRAL' && item.impact === 'HIGH' && drivers.length < 3) {
+      drivers.push(item.title);
+    }
+  }
+  if (drivers.length === 0) {
+    for (const item of recent) {
+      if (item.direction !== 'NEUTRAL' && drivers.length < 3) drivers.push(item.title);
+    }
   }
 
   return {
