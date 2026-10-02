@@ -15,7 +15,7 @@ The product is designed around one principle: **reduce the time between an impor
 - 80:20 pre-news context framework
 - 40:60 post-release fundamental/market-confirmation framework
 - BUY / SELL / WAIT signal states
-- Real-time Server-Sent Events (SSE) feed
+- Short-polling live news feed with shared server-side cache
 - Compact floating BUY / SELL notification
 - Mobile-first, low-clutter interface
 - Health and API endpoints for deployment monitoring
@@ -58,8 +58,8 @@ The weighting model is a product rule, not a guarantee of future performance.
 
 ## Tech stack
 
-- Next.js 14
-- React 18
+- Next.js 16
+- React 19
 - TypeScript
 - RSS Parser
 - Server-Sent Events
@@ -135,7 +135,7 @@ npm run build
 | `GET /api/news/stream` | SSE live news stream |
 | `GET /api/signal` | Current XAUUSD signal |
 
-## Engineering principles
+## Runtime reliability\n\nThe dashboard polls the APIs every 15 seconds. The news collector uses a short in-process cache and request coalescing so `/api/news` and `/api/signal` do not independently hammer upstream RSS feeds when they refresh at the same time. This cache is intentionally small and non-authoritative; each deployment instance may have its own cache.\n\n## Engineering principles
 
 1. Signal integrity over visual noise.
 2. Server-side secrets only.
