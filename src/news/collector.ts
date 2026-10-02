@@ -8,18 +8,23 @@ const parser = new Parser();
 const FEEDS = [
   { source: 'Google News', url: 'https://news.google.com/rss/search?q=XAUUSD%20OR%20gold%20OR%20Federal%20Reserve%20OR%20FOMC&hl=en-US&gl=US&ceid=US:en' },
   { source: 'Federal Reserve', url: 'https://www.federalreserve.gov/feeds/press_all.xml' },
+  { source: 'BLS Employment Situation', url: 'https://www.bls.gov/feed/empsit.rss' },
+  { source: 'BLS CPI', url: 'https://www.bls.gov/feed/cpi.rss' },
+  { source: 'BLS PPI', url: 'https://www.bls.gov/feed/ppi.rss' },
 ] as const;
 
 const FEED_TIMEOUT_MS = 8000;
 
-const BULLISH_TERMS = ['rate cut','rate cuts','dovish','lower rates','lower yield','weaker dollar','weak dollar','recession','slowing inflation'] as const;
-const BEARISH_TERMS = ['rate hike','rate hikes','hawkish','higher rates','higher yield','strong dollar','strong usd','sticky inflation'] as const;
+const BULLISH_TERMS = ['rate cut','rate cuts','dovish','lower rates','lower yield','weaker dollar','weak dollar','recession','slowing inflation','cooler inflation','soft inflation','rate cuts expected','hike is unlikely','hike unlikely','no urgency to hike','wait before hiking'] as const;
+const BEARISH_TERMS = ['rate hike','rate hikes','hawkish','higher rates','higher yield','strong dollar','strong usd','sticky inflation','hot inflation','inflation remains elevated'] as const;
+const NEGATED_BEARISH_TERMS = ['no rate hike','no rate hikes','no urgency to hike','hike is unlikely','hike unlikely','rate hike unlikely','rates may stay unchanged','wait before hiking','delay the hike','delay rate hike'] as const;
 const HIGH_IMPACT_TERMS = ['fomc','fed decision','interest rate','rate decision','cpi','nfp','nonfarm payroll','ppi','inflation'] as const;
-const RELEVANCE_PATTERN = /gold|xauusd|xau\/usd|federal reserve|fed|fomc|inflation|cpi|ppi|nfp|nonfarm|dollar|treasury|yield|interest rate/i;
+const RELEVANCE_PATTERN = /gold|xauusd|xau\/usd|federal reserve|fed|fomc|inflation|cpi|ppi|nfp|nonfarm|payroll|employment situation|unemployment|dollar|treasury|yield|interest rate/i;
 
 function classify(text: string): Pick<News, 'impact' | 'direction' | 'score'> {
   const bullish = BULLISH_TERMS.filter((term) => text.includes(term)).length;
-  const bearish = BEARISH_TERMS.filter((term) => text.includes(term)).length;
+  const negatedBearish = NEGATED_BEARISH_TERMS.filter((term) => text.includes(term)).length;
+  const bearish = Math.max(0, BEARISH_TERMS.filter((term) => text.includes(term)).length - negatedBearish);
   const direction: NewsDirection = bullish > bearish ? 'BULLISH' : bearish > bullish ? 'BEARISH' : 'NEUTRAL';
   const impact: NewsImpact = HIGH_IMPACT_TERMS.some((term) => text.includes(term)) ? 'HIGH' : bullish + bearish > 0 ? 'MEDIUM' : 'LOW';
   const score = Math.min(100, Math.max(0, Math.round(50 + (bullish - bearish) * 18 + (impact === 'HIGH' ? 20 : impact === 'MEDIUM' ? 8 : 0))));
