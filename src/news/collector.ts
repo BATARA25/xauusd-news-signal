@@ -1,5 +1,6 @@
 import Parser from 'rss-parser';
 import type { News, NewsDirection, NewsImpact } from './types';
+import { detectEvent, enrichNews } from '../intelligence';
 
 const parser = new Parser();
 
@@ -36,6 +37,7 @@ function normalize(item: Parser.Item, source: string): News | null {
     publishedAt,
     ...classify(text.toLowerCase()),
     summary: snippet.slice(0, 220),
+    event: detectEvent(text),
   };
 }
 
@@ -56,5 +58,5 @@ export async function collectNews(): Promise<News[]> {
     const existing = deduped.get(item.id);
     if (!existing || Date.parse(item.publishedAt) > Date.parse(existing.publishedAt)) deduped.set(item.id, item);
   }
-  return [...deduped.values()].sort((a, b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt)).slice(0, 50);
+  return enrichNews([...deduped.values()]);
 }

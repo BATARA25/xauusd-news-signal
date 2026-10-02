@@ -1,5 +1,6 @@
 export type NewsImpact = 'HIGH' | 'MEDIUM' | 'LOW';
 export type NewsDirection = 'BULLISH' | 'BEARISH' | 'NEUTRAL';
+export type NewsSourceTier = 'OFFICIAL' | 'PREMIUM' | 'REPUTABLE' | 'AGGREGATOR' | 'UNKNOWN';
 
 export type NewsEvent = {
   id: string;
@@ -22,4 +23,10 @@ export type News = {
   score: number;
   summary: string;
   event?: NewsEvent;
+  sourceTier?: NewsSourceTier;
+  sourceQuality?: number;
+  novelty?: number;
+  marketMoving?: number;
+  duplicateOf?: string;
+  canonicalHeadline?: string;
 };
