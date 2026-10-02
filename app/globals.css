@@ -8,7 +8,8 @@ button{font:inherit}
 .site-header{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;border-bottom:1px solid #20262e;padding-bottom:26px}
 .brand{font-size:24px;font-weight:760;letter-spacing:-.03em}
 .site-header p{margin:5px 0 0;color:#8c95a1;font-size:13px}
-.header-actions{display:flex;align-items:center;gap:14px}
+.header-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.audit-panel{align-items:start}.audit-actions{display:flex;align-items:center;gap:15px;margin-top:14px;flex-wrap:wrap}.audit-list{margin-top:0}
 .install-button{border:1px solid #39424d;border-radius:8px;background:#11161b;color:#e8edf2;padding:8px 11px;font-size:9px;font-weight:750;letter-spacing:.12em;cursor:pointer}
 .install-button:hover{border-color:#626e7b;background:#151b21}
 .live{display:flex;align-items:center;gap:8px;color:#89929e;font-size:10px;letter-spacing:.14em}
