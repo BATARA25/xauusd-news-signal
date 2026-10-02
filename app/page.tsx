@@ -42,6 +42,9 @@ type Audit = {
   prices: Record<'5m' | '15m' | '30m' | '60m', number | null>;
 };
 
+type Price = { price: number; updatedAt: string; source: string; stale?: boolean };
+type Audit = { id: string; timestamp: string; bias: 'BUY' | 'SELL'; eventName?: string; phase?: string; confidence: number; evidenceScore: number; entry: number; prices: Record<'5m' | '15m' | '30m' | '60m', number | null> };
+
 type InstallPromptEvent = Event & {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
@@ -65,6 +68,14 @@ export default function Home() {
   const [live, setLive] = useState(false);
   const [alert, setAlert] = useState<'BUY' | 'SELL' | null>(null);
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
+  const [price, setPrice] = useState<Price | null>(null);
+  const [notifications, setNotifications] = useState<NotificationPermission | 'unsupported'>('default');
+  const [audits, setAudits] = useState<Audit[]>([]);
+  const previousKey = useRef('WAIT:');
+  const AUDIT_KEY = 'newsxleak-live-audit-v1';
+  const saveAudits = (next: Audit[]) => { setAudits(next); localStorage.setItem(AUDIT_KEY, JSON.stringify(next.slice(0, 100))); };
+  const refreshPrice = async () => { try { const r = await fetch('/api/price', { cache: 'no-store' }); if (!r.ok) return; const d = await r.json(); if (d.ok && Number.isFinite(d.price)) setPrice(d); } catch {} };
+  const notifySignal = async (bias: 'BUY' | 'SELL', next: Signal) => { if (!('Notification' in window) || Notification.permission !== 'granted') return; const reg = await navigator.serviceWorker.ready; reg.active?.postMessage({ type: 'SIGNAL_ALERT', bias, eventName: next.eventName ?? 'XAUUSD signal', confidence: next.confidence, phase: next.phase ?? 'CONTEXT' }); };
   const [price, setPrice] = useState<Price | null>(null);
   const [notifications, setNotifications] = useState<NotificationPermission | 'unsupported'>('default');
   const [audits, setAudits] = useState<Audit[]>([]);
@@ -142,6 +153,8 @@ export default function Home() {
 
   useEffect(() => {
     document.title = 'NewsXLeak — XAUUSD News Intelligence';
+    const saved = localStorage.getItem(AUDIT_KEY); if (saved) { try { setAudits(JSON.parse(saved)); } catch {} }
+    if ('Notification' in window) setNotifications(Notification.permission); else setNotifications('unsupported');
     const saved = localStorage.getItem(AUDIT_KEY);
     if (saved) { try { setAudits(JSON.parse(saved)); } catch {} }
     if ('Notification' in window) setNotifications(Notification.permission);
@@ -210,6 +223,10 @@ export default function Home() {
     URL.revokeObjectURL(url);
   };
 
+  useEffect(() => { if (!price || audits.length === 0) return; const now=Date.now(); let changed=false; const next=audits.map(item => { const elapsed=now-Date.parse(item.timestamp); const prices={...item.prices}; for (const [label,minutes] of [['5m',5],['15m',15],['30m',30],['60m',60]] as const) if (elapsed>=minutes*60000 && prices[label]===null) { prices[label]=price.price; changed=true; } return {...item,prices}; }); if (changed) saveAudits(next); }, [price,audits]);
+  const enableNotifications = async () => { if (!('Notification' in window)) return; const permission=await Notification.requestPermission(); setNotifications(permission); if (permission==='granted') { const reg=await navigator.serviceWorker.ready; reg.active?.postMessage({type:'TEST_NOTIFICATION'}); } };
+  const exportAudit = () => { const header='timestamp,bias,event,phase,confidence,evidence,entry,5m,15m,30m,60m\\n'; const rows=audits.map(a=>[a.timestamp,a.bias,a.eventName??'',a.phase??'',a.confidence,a.evidenceScore,a.entry,a.prices['5m']??'',a.prices['15m']??'',a.prices['30m']??'',a.prices['60m']??''].map(v=>'"'+String(v).replaceAll('"','""')+'"').join(',')).join('\\n'); const blob=new Blob([header+rows],{type:'text/csv;charset=utf-8'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='newsxleak-live-audit.csv'; a.click(); URL.revokeObjectURL(url); };
+
   const installApp = async () => {
     if (!installPrompt) return;
     await installPrompt.prompt();
@@ -259,6 +276,7 @@ export default function Home() {
 
         <section className="quickbar">
           <div><span>MARKET</span><strong>XAUUSD</strong></div>
+          <div><span>PRICE</span><strong>{price ? price.price.toFixed(2) : '—'}</strong></div>
           <div><span>PRICE</span><strong>{price ? price.price.toFixed(2) : '—'}</strong></div>
           <div><span>IMPACT</span><strong>{signal?.impact ?? '—'}</strong></div>
           <div><span>PHASE</span><strong>{signal?.phase ?? '—'}</strong></div>
@@ -337,6 +355,9 @@ export default function Home() {
             </article>
           ))}
         </section>
+
+        <section className="method audit-panel"><div><span className="label">LIVE AUDIT</span><h2>{audits.length} directional alerts recorded</h2></div><div><p>Captures price at signal and 5/15/30/60-minute reaction points. Observation log only; no fabricated WIN/LOSS.</p><div className="audit-actions"><button className="install-button" onClick={exportAudit}>EXPORT CSV</button>{price && <span className="feed-status">Spot {price.price.toFixed(2)} · {timeWIB(price.updatedAt)}</span>}</div></div></section>
+        <section className="news-list audit-list">{audits.length===0 ? <div className="empty">No BUY/SELL event captured yet.</div> : audits.slice(0,8).map(a => <article className="news-row" key={a.id}><div className="news-meta"><span>{timeWIB(a.timestamp)}</span><span>{a.phase ?? '—'}</span></div><div className="news-main"><h3>{a.bias} · {a.eventName ?? 'Signal'}</h3><p>Entry {a.entry.toFixed(2)} · +5m {a.prices['5m']?.toFixed(2) ?? 'pending'} · +15m {a.prices['15m']?.toFixed(2) ?? 'pending'} · +30m {a.prices['30m']?.toFixed(2) ?? 'pending'} · +60m {a.prices['60m']?.toFixed(2) ?? 'pending'}</p></div><div className={'direction '+a.bias.toLowerCase()}>{a.confidence}%</div></article>)}</section>
 
         <footer>
           <span>NewsXLeak</span>
