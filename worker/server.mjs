@@ -11,6 +11,8 @@ const SUBJECT = process.env.VAPID_SUBJECT || 'mailto:newsxleak@proton.me';
 const DATA_DIR = process.env.DATA_DIR || '/data';
 const DATA_FILE = path.join(DATA_DIR, 'subscriptions.json');
 const POLL_MS = 10000;
+const WEB_ORIGIN = process.env.NEWSXLEAK_WEB_ORIGIN || 'https://newsxleak-web-production.up.railway.app';
+const STATE_FILE = path.join(DATA_DIR, 'state.json');
 
 if (!PUBLIC_KEY || !PRIVATE_KEY) throw new Error('VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY are required');
 webpush.setVapidDetails(SUBJECT, PUBLIC_KEY, PRIVATE_KEY);
@@ -22,6 +24,8 @@ async function writeSubscriptions(items) {
   await fs.mkdir(DATA_DIR, { recursive: true });
   await fs.writeFile(DATA_FILE, JSON.stringify(items, null, 2));
 }
+async function readState() { try { return JSON.parse(await fs.readFile(STATE_FILE, 'utf8')); } catch { return {}; } }
+async function writeState(state) { await fs.mkdir(DATA_DIR, { recursive: true }); await fs.writeFile(STATE_FILE, JSON.stringify(state, null, 2)); }
 async function addSubscription(subscription) {
   if (!subscription?.endpoint || !subscription?.keys?.p256dh || !subscription?.keys?.auth) throw new Error('invalid_subscription');
   const items = await readSubscriptions();
@@ -85,7 +89,7 @@ async function poll() {
 }
 
 const server = http.createServer(async (req, res) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Origin', WEB_ORIGIN);
   res.setHeader('Access-Control-Allow-Headers', 'content-type');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
 
@@ -110,6 +114,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'POST' && req.url === '/subscribe') {
+    if (req.headers.origin && req.headers.origin !== WEB_ORIGIN) { res.writeHead(403, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ ok: false, error: 'origin_not_allowed' })); return; }
     try {
       let raw = '';
       for await (const chunk of req) raw += chunk;
