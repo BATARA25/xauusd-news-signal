@@ -32,6 +32,11 @@ export async function GET(request: Request) {
       analysisLatencyMs: Math.max(0, Date.parse(analyzedAt) - Date.parse(receivedAt)),
       signalLatencyMs: Math.max(0, Date.parse(signalAt) - Date.parse(receivedAt)),
       marketAvailable: Boolean(market),
+      calibration: {
+        signalId: signal.signalId,
+        captureEndpoint: '/api/signal/outcome',
+        horizons: ['1m', '5m', '15m', '30m', '60m'],
+      },
     });
   } catch (error) {
     console.error('[signal] route failed', error);
