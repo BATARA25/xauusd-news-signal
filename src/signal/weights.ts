@@ -19,6 +19,8 @@ export const SIGNAL_CONFIG = {
   minimumDirectionalSources: 2,
   minimumDirectionalItems: 3,
   conflictAgreementThreshold: 0.60,
+  maxConflictPenalty: 0.35,
+  outcomeCaptureHorizons: ['1m', '5m', '15m', '30m', '60m'] as const,
 } as const;
 
 export function newsWeight(item: News, now = Date.now()): number {
@@ -31,10 +33,7 @@ export function newsWeight(item: News, now = Date.now()): number {
   const ageHours = Number.isFinite(published)
     ? Math.max(0, (now - published) / 3600000)
     : SIGNAL_CONFIG.maxAgeHours;
-  const recency = Math.max(
-    SIGNAL_CONFIG.minimumRecencyWeight,
-    1 - ageHours / SIGNAL_CONFIG.maxAgeHours,
-  );
+  const recency = Math.max(SIGNAL_CONFIG.minimumRecencyWeight, 1 - ageHours / SIGNAL_CONFIG.maxAgeHours);
   const sourceQuality = item.sourceQuality ?? 0.5;
   const novelty = item.novelty ?? 1;
   const marketMoving = item.marketMoving ?? 0.5;
@@ -52,10 +51,6 @@ export function releaseSurpriseDirection(actual?: number, forecast?: number, eve
   if (expected === 0) return 0;
   const raw = clampUnit((Number(actual) - expected) / Math.max(Math.abs(expected), 1));
   const name = eventName.toLowerCase();
-
-  // Macro releases are not all monotonic. This is intentionally limited to
-  // the releases for which a stronger-than-expected print usually changes
-  // the rate path in the gold-negative direction.
   const goldNegative = /cpi|inflation|ppi|rate|interest|yield|payroll|nfp|employment|jobs|gdp|retail sales|pmi/.test(name);
   return goldNegative ? -raw : raw;
 }
