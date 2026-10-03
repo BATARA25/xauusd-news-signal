@@ -65,7 +65,7 @@ function atr(values: number[], period = 14): number | undefined {
 async function fetchSeries(symbol: string): Promise<number[]> {
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=1d&interval=5m&includePrePost=false`;
   const response = await fetch(url, {
-    cache: 'no-store',
+    next: { revalidate: 5 },
     signal: AbortSignal.timeout(3500),
     headers: { Accept: 'application/json', 'User-Agent': 'NewsXLeak/1.0' },
   });
