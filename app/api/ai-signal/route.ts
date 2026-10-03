@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { collectNews } from '@/src/news';
+import { getMarketSnapshot } from '@/src/market';
 import { buildSignal } from '@/src/signal';
 
 export const dynamic = 'force-dynamic';
@@ -21,25 +22,56 @@ type AISignal = {
   generatedAt: string;
 };
 
-function extractJson(text: string): AISignal | null {
+function extractJson(value: string): AISignal | null {
   try {
-    return JSON.parse(text) as AISignal;
+    return JSON.parse(value) as AISignal;
   } catch {
-    const match = text.match(/\{[\s\S]*\}/);
+    const match = value.match(/\{[\s\S]*\}/);
     if (!match) return null;
     try { return JSON.parse(match[0]) as AISignal; } catch { return null; }
   }
 }
 
-export async function GET() {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) {
-    return NextResponse.json({ ok: false, error: 'OPENROUTER_API_KEY is not configured' }, { status: 503 });
-  }
+function deterministicResponse(deterministic: ReturnType<typeof buildSignal>, provider: string, model?: string | null) {
+  return {
+    symbol: 'XAUUSD' as const,
+    bias: deterministic.bias,
+    confidence: deterministic.confidence,
+    macroRegime: deterministic.regime,
+    reasoning: 'Deterministic institutional engine is authoritative; external AI is used only as a reasoning layer.',
+    bullishFactors: deterministic.bias === 'BUY' ? deterministic.drivers : [],
+    bearishFactors: deterministic.bias === 'SELL' ? deterministic.drivers : [],
+    keyRisks: deterministic.bias === 'WAIT' ? ['Evidence is insufficient or conflicting.'] : ['External AI validation is unavailable.'],
+    invalidation: deterministic.intradaySetup.trigger,
+    keyEvents: deterministic.eventName ? [deterministic.eventName] : [],
+    generatedAt: new Date().toISOString(),
+    provider,
+    model: model ?? null,
+  };
+}
 
+export async function GET() {
   try {
-    const news = await collectNews();
-    const deterministic = buildSignal(news);
+    const [news, market] = await Promise.all([
+      collectNews({ realtime: true }),
+      getMarketSnapshot().catch((error) => {
+        console.error('[ai-signal] market snapshot failed', error);
+        return undefined;
+      }),
+    ]);
+
+    const deterministic = buildSignal(news, Date.now(), market);
+    const apiKey = process.env.OPENROUTER_API_KEY;
+
+    if (!apiKey) {
+      return NextResponse.json({
+        ok: true,
+        provider: 'deterministic',
+        signal: deterministicResponse(deterministic, 'deterministic'),
+        fallback: deterministic,
+      });
+    }
+
     const context = news.slice(0, 15).map((n) => ({
       title: n.title,
       source: n.source,
@@ -50,13 +82,30 @@ export async function GET() {
       summary: n.summary,
     }));
 
-    const prompt = `You are the macro-news reasoning engine for BATARA CAPITAL XAUUSD NEWS SIGNAL.\nAnalyze only the supplied news context and deterministic signal. Do not invent market data, prices, technical levels, or events. Treat headlines as evidence, not certainty.\n\nReturn ONLY valid JSON with this exact shape:\n{\n  "symbol":"XAUUSD",\n  "bias":"BUY|SELL|WAIT",\n  "confidence":0,\n  "macroRegime":"string",\n  "reasoning":"string",\n  "bullishFactors":["string"],\n  "bearishFactors":["string"],\n  "keyRisks":["string"],\n  "invalidation":"string",\n  "keyEvents":["string"],\n  "generatedAt":"ISO timestamp"\n}\nRules: confidence 0-100; use WAIT when evidence is mixed, stale, or insufficient; distinguish gold-positive vs gold-negative macro pressure; prioritize HIGH-impact and recent items; never claim guaranteed profit or certainty.\n\nDETERMINISTIC SIGNAL:\n${JSON.stringify(deterministic)}\n\nNEWS CONTEXT:\n${JSON.stringify(context)}`;
+    const prompt = [
+      'You are the macro-news reasoning engine for BATARA CAPITAL XAUUSD NEWS SIGNAL.',
+      'Analyze only the supplied news, deterministic signal and market context.',
+      'Do not invent prices, levels, events or data. Treat headlines as evidence, not certainty.',
+      'Return ONLY valid JSON with keys: symbol,bias,confidence,macroRegime,reasoning,bullishFactors,bearishFactors,keyRisks,invalidation,keyEvents,generatedAt.',
+      'Confidence is evidence strength, not win probability.',
+      'Preserve WAIT when the deterministic gate is WAIT or evidence conflicts.',
+      'Never claim guaranteed profit.',
+      '',
+      'DETERMINISTIC SIGNAL:',
+      JSON.stringify(deterministic),
+      '',
+      'MARKET:',
+      JSON.stringify(market ?? null),
+      '',
+      'NEWS:',
+      JSON.stringify(context),
+    ].join('\n');
 
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: 'Bearer ' + apiKey,
         'HTTP-Referer': 'https://xauusd-news-signal.vercel.app',
         'X-Title': 'BATARA CAPITAL XAUUSD NEWS SIGNAL',
       },
@@ -74,46 +123,49 @@ export async function GET() {
 
     if (!response.ok) {
       const detail = await response.text();
-      let providerCode: string | null = null;
-      let providerType: string | null = null;
-      let providerMessage: string | null = null;
-      try {
-        const parsed = JSON.parse(detail);
-        providerCode = parsed?.error?.code?.toString?.() ?? null;
-        providerType = parsed?.error?.type ?? null;
-        providerMessage = parsed?.error?.message ?? null;
-      } catch {
-        providerMessage = detail.slice(0, 300) || null;
-      }
-      console.error('OpenRouter error:', response.status, detail.slice(0, 500));
+      console.error('[ai-signal] provider failed', response.status, detail.slice(0, 500));
       return NextResponse.json({
-        ok: false,
-        error: 'AI provider request failed',
+        ok: true,
+        provider: 'deterministic-fallback',
         providerStatus: response.status,
-        providerCode,
-        providerType,
-        providerMessage,
         model: MODEL,
+        signal: deterministicResponse(deterministic, 'deterministic-fallback', MODEL),
         fallback: deterministic,
-      }, { status: 502 });
+      });
     }
 
     const data = await response.json();
-    const text = data.choices?.[0]?.message?.content || '';
-    const ai = extractJson(text);
-    if (!ai) return NextResponse.json({ ok: false, error: 'AI returned invalid JSON', model: MODEL, fallback: deterministic }, { status: 502 });
+    const ai = extractJson(data.choices?.[0]?.message?.content || '');
 
-    const signal: AISignal = {
-      ...ai,
-      symbol: 'XAUUSD',
-      bias: ['BUY', 'SELL', 'WAIT'].includes(ai.bias) ? ai.bias : 'WAIT',
-      confidence: Math.max(0, Math.min(100, Number(ai.confidence) || 0)),
-      generatedAt: new Date().toISOString(),
-    };
+    if (!ai) {
+      return NextResponse.json({
+        ok: true,
+        provider: 'deterministic-fallback',
+        model: MODEL,
+        signal: deterministicResponse(deterministic, 'deterministic-fallback', MODEL),
+        fallback: deterministic,
+      });
+    }
 
-    return NextResponse.json({ ok: true, model: MODEL, signal, fallback: deterministic });
+    return NextResponse.json({
+      ok: true,
+      provider: 'openrouter',
+      model: MODEL,
+      signal: {
+        ...ai,
+        symbol: 'XAUUSD',
+        // LLM cannot override the deterministic hard gate.
+        bias: deterministic.bias,
+        confidence: Math.min(
+          deterministic.confidence,
+          Math.max(0, Math.min(100, Number(ai.confidence) || 0)),
+        ),
+        generatedAt: new Date().toISOString(),
+      },
+      fallback: deterministic,
+    });
   } catch (error) {
-    console.error('AI signal error:', error);
-    return NextResponse.json({ ok: false, error: 'AI signal unavailable' }, { status: 500 });
+    console.error('[ai-signal] failed', error);
+    return NextResponse.json({ ok: false, error: 'ai_signal_unavailable' }, { status: 500 });
   }
 }
