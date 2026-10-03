@@ -1,26 +1,21 @@
 import type { News } from '../news/types';
 import { clampUnit, newsWeight, releaseSurpriseDirection, SIGNAL_CONFIG } from './weights';
 import { buildIntradaySetup } from './setup';
+import type { MarketSnapshot } from '../market';
 import type { MarketSignal, SignalComponents, SignalPhase } from './types';
 
 function aggregate(news: News[], now: number, predicate?: (item: News) => boolean): number {
   let numerator = 0;
   let denominator = 0;
-
   for (const item of news) {
     if (predicate && !predicate(item)) continue;
     const direction = item.direction === 'BULLISH' ? 1 : item.direction === 'BEARISH' ? -1 : 0;
     if (direction === 0) continue;
-
-    // item.score is a strength score around 50, not a probability.
-    // Using score/100 would create a bullish bias because 68 is larger than
-    // the corresponding bearish value 32. Convert it to symmetric strength.
     const strength = Math.abs(item.score - 50) / 50;
     const weight = newsWeight(item, now);
     numerator += direction * strength * weight;
     denominator += weight;
   }
-
   return denominator > 0 ? clampUnit(numerator / denominator) : 0;
 }
 
@@ -52,14 +47,33 @@ function resolvePhase(event: News['event'], now: number): SignalPhase {
   return minutesSinceRelease <= SIGNAL_CONFIG.postReleaseWindowMinutes ? 'POST_RELEASE' : 'CONTEXT';
 }
 
+function marketRegimeScore(market?: MarketSnapshot): number {
+  if (!market) return 0;
+  return market.trendRegime === 'BULL' ? 1 : market.trendRegime === 'BEAR' ? -1 : 0;
+}
+
+function marketConfirmationScore(market?: MarketSnapshot): number {
+  if (!market) return 0;
+  return clampUnit(marketRegimeScore(market) * 0.55 + market.macroAlignment * 0.45);
+}
+
 function componentScore(components: SignalComponents, phase: SignalPhase): number {
+  const marketConfirmation = clampUnit(components.marketRegime * 0.55 + components.macroAlignment * 0.45);
+  let base: number;
+
   if (phase === 'PRE_RELEASE') {
-    return clampUnit(components.context * SIGNAL_CONFIG.preReleaseContextWeight + components.confirmation * SIGNAL_CONFIG.preReleaseConfirmationWeight);
+    base = components.context * SIGNAL_CONFIG.preReleaseContextWeight
+      + components.confirmation * SIGNAL_CONFIG.preReleaseConfirmationWeight;
+  } else if (phase === 'POST_RELEASE') {
+    base = components.surprise * SIGNAL_CONFIG.postReleaseSurpriseWeight
+      + components.reaction * SIGNAL_CONFIG.postReleaseReactionWeight;
+  } else {
+    base = components.context * 0.65
+      + components.marketRegime * 0.20
+      + components.macroAlignment * 0.15;
   }
-  if (phase === 'POST_RELEASE') {
-    return clampUnit(components.surprise * SIGNAL_CONFIG.postReleaseSurpriseWeight + components.reaction * SIGNAL_CONFIG.postReleaseReactionWeight);
-  }
-  return components.context;
+
+  return clampUnit(base * 0.80 + marketConfirmation * 0.20);
 }
 
 function directionalAgreement(news: News[]): number {
@@ -70,7 +84,7 @@ function directionalAgreement(news: News[]): number {
   return Math.max(bullish, bearish) / directional.length;
 }
 
-function evidenceScore(news: News[], event: News['event'], phase: SignalPhase): number {
+function evidenceScore(news: News[], event: News['event'], phase: SignalPhase, market?: MarketSnapshot): number {
   const directional = news.filter((item) => item.direction !== 'NEUTRAL');
   const sampleEvidence = Math.min(1, news.length / 10);
   const agreement = directionalAgreement(news);
@@ -80,19 +94,30 @@ function evidenceScore(news: News[], event: News['event'], phase: SignalPhase): 
   const uniqueSources = new Set(news.map((item) => item.source.toLowerCase().trim()).filter(Boolean)).size;
   const sourceDiversity = Math.min(1, uniqueSources / 3);
   const eventEvidence = event ? 1 : 0.25;
-  const structuredReleaseEvidence = phase === 'POST_RELEASE' && event?.actual !== undefined && event?.forecast !== undefined ? 1 : 0.35;
+  const structuredReleaseEvidence =
+    phase === 'POST_RELEASE' && event?.actual !== undefined && event?.forecast !== undefined ? 1 : 0.35;
+  const marketEvidence = market
+    ? Math.min(1, 0.55 + Math.abs(marketConfirmationScore(market)) * 0.45)
+    : 0.35;
 
-  return Math.round(
-    (sampleEvidence * 0.20
-      + agreement * 0.25
-      + sourceQuality * 0.15
-      + sourceDiversity * 0.15
-      + eventEvidence * 0.10
-      + structuredReleaseEvidence * 0.15) * 100,
-  );
+  return Math.round((
+    sampleEvidence * 0.17
+    + agreement * 0.22
+    + sourceQuality * 0.13
+    + sourceDiversity * 0.13
+    + eventEvidence * 0.08
+    + structuredReleaseEvidence * 0.12
+    + marketEvidence * 0.15
+  ) * 100);
 }
 
-function directionalGate(news: News[], normalized: number, event: News['event'], phase: SignalPhase): 'BUY' | 'SELL' | 'WAIT' {
+function directionalGate(
+  news: News[],
+  normalized: number,
+  event: News['event'],
+  phase: SignalPhase,
+  market?: MarketSnapshot,
+): 'BUY' | 'SELL' | 'WAIT' {
   if (Math.abs(normalized) < SIGNAL_CONFIG.waitThreshold) return 'WAIT';
 
   const directional = news.filter((item) => item.direction !== 'NEUTRAL');
@@ -102,9 +127,8 @@ function directionalGate(news: News[], normalized: number, event: News['event'],
   const dominantSources = new Set(dominant.map((item) => item.source.toLowerCase().trim())).size;
   const agreement = directional.length ? Math.max(bullish.length, bearish.length) / directional.length : 0;
 
-  // A structured post-release actual-vs-forecast surprise is allowed to act
-  // with one official source. Otherwise require independent source agreement.
-  const structuredRelease = phase === 'POST_RELEASE'
+  const structuredRelease =
+    phase === 'POST_RELEASE'
     && event?.actual !== undefined
     && event?.forecast !== undefined;
 
@@ -112,14 +136,24 @@ function directionalGate(news: News[], normalized: number, event: News['event'],
     dominant.length < SIGNAL_CONFIG.minimumDirectionalItems
     || dominantSources < SIGNAL_CONFIG.minimumDirectionalSources
     || agreement < SIGNAL_CONFIG.conflictAgreementThreshold
-  )) {
-    return 'WAIT';
+  )) return 'WAIT';
+
+  if (market) {
+    const marketConfirmation = marketConfirmationScore(market);
+    const sameDirection = Math.sign(normalized) === Math.sign(marketConfirmation);
+    const strongConflict = Math.abs(marketConfirmation) >= 0.55 && !sameDirection;
+    if (strongConflict && !structuredRelease) return 'WAIT';
   }
 
   return normalized > 0 ? 'BUY' : 'SELL';
 }
 
-export function buildSignal(news: News[], now = Date.now(), market?: { price?: number; priceUpdatedAt?: string }): MarketSignal {
+export function buildSignal(
+  news: News[],
+  now = Date.now(),
+  market?: MarketSnapshot,
+  priceOverride?: { price?: number; priceUpdatedAt?: string },
+): MarketSignal {
   const recent = news
     .filter((item) => {
       const published = Date.parse(item.publishedAt);
@@ -139,12 +173,18 @@ export function buildSignal(news: News[], now = Date.now(), market?: { price?: n
       })
     : 0;
   const surprise = releaseSurpriseDirection(event?.actual, event?.forecast, event?.name);
-  const components: SignalComponents = { context, confirmation, surprise, reaction };
-  const normalized = componentScore(components, phase);
-  const evidence = evidenceScore(recent, event, phase);
-  const bias = directionalGate(recent, normalized, event, phase);
+  const components: SignalComponents = {
+    context,
+    confirmation,
+    surprise,
+    reaction,
+    marketRegime: marketRegimeScore(market),
+    macroAlignment: market?.macroAlignment ?? 0,
+  };
 
-  // Confidence is evidence-weighted, not a claimed win probability.
+  const normalized = componentScore(components, phase);
+  const evidence = evidenceScore(recent, event, phase, market);
+  const bias = directionalGate(recent, normalized, event, phase, market);
   const rawConfidence = 50 + Math.abs(normalized) * 42;
   const evidenceAdjusted = 25 + (rawConfidence - 25) * (evidence / 100);
   const confidence = Math.min(
@@ -154,19 +194,21 @@ export function buildSignal(news: News[], now = Date.now(), market?: { price?: n
 
   const score = Math.round(50 + normalized * 50);
   const highImpactCount = recent.filter((item) => item.impact === 'HIGH').length;
-  const impact = highImpactCount > 0 ? 'HIGH' : recent.some((item) => item.impact === 'MEDIUM') ? 'MEDIUM' : 'LOW';
+  const impact = highImpactCount > 0 ? 'HIGH'
+    : recent.some((item) => item.impact === 'MEDIUM') ? 'MEDIUM' : 'LOW';
 
   const drivers: string[] = [];
   for (const item of recent) {
-    if (item.direction !== 'NEUTRAL' && item.impact === 'HIGH' && drivers.length < 3) {
-      drivers.push(item.title);
-    }
+    if (item.direction !== 'NEUTRAL' && item.impact === 'HIGH' && drivers.length < 3) drivers.push(item.title);
   }
   if (drivers.length === 0) {
     for (const item of recent) {
       if (item.direction !== 'NEUTRAL' && drivers.length < 3) drivers.push(item.title);
     }
   }
+
+  const price = priceOverride?.price ?? market?.goldPrice;
+  const priceUpdatedAt = priceOverride?.priceUpdatedAt ?? market?.updatedAt;
 
   return {
     symbol: 'XAUUSD',
@@ -181,12 +223,15 @@ export function buildSignal(news: News[], now = Date.now(), market?: { price?: n
     eventName: event?.name,
     eventReleaseAt: event?.releaseAt,
     components,
-    intradaySetup: buildIntradaySetup(bias, market?.price, impact),
-    price: market?.price,
-    priceUpdatedAt: market?.priceUpdatedAt,
+    intradaySetup: buildIntradaySetup(bias, price, impact, market),
+    price,
+    priceUpdatedAt,
     updatedAt: new Date(now).toISOString(),
     drivers,
     highImpactCount,
     sampleSize: recent.length,
+    market,
+    regime: market?.trendRegime ?? 'RANGE',
+    volatility: market?.volatilityRegime ?? 'NORMAL',
   };
 }
