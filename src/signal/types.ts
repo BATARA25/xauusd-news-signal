@@ -11,6 +11,22 @@ export type SignalComponents = {
   reaction: number;
   marketRegime: number;
   macroAlignment: number;
+  crossAsset: number;
+  conflictPenalty: number;
+};
+
+export type OutcomeHorizon = '1m' | '5m' | '15m' | '30m' | '60m';
+
+export type SignalOutcome = {
+  horizon: OutcomeHorizon;
+  entryPrice?: number;
+  exitPrice?: number;
+  returnPct?: number;
+  rMultiple?: number;
+  mfePct?: number;
+  maePct?: number;
+  hitTarget?: boolean;
+  hitStop?: boolean;
 };
 
 export type IntradaySetup = {
@@ -50,4 +66,6 @@ export type MarketSignal = {
   market?: MarketSnapshot;
   regime: MarketSnapshot['trendRegime'];
   volatility: MarketSnapshot['volatilityRegime'];
+  signalId: string;
+  outcome?: Partial<Record<OutcomeHorizon, SignalOutcome>>;
 };
